@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.8)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.8.0
+// @version      3.9.0
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida estilo Brawl Stars, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -601,6 +601,8 @@
     const SIZE_KEY = 'psm-panel-size-v1';
     const STARTERS_KEY = 'psm-starter-moves-v1';
     const MAX_HISTORY_RUNS = 40;
+    const MIN_MAP_RADIUS = 450;
+    const MAX_MAP_RADIUS = 3000; // Limita el zoom out mínimo del minimapa a 0.6× (1800 / 3000)
 
     let radiusWorld = 1800;
     let centerWorld = null;
@@ -3459,9 +3461,6 @@
     if (!activeRun && !isEditingUI) {
       return;
     }
-    if (hiddenByUser && !isEditingUI) {
-      return;
-    }
 
     let curHp = 100;
     let maxHp = 100;
@@ -3907,7 +3906,7 @@
     mapFoldBtn.textContent = mapCollapsed ? '▣' : '▁';
     if (!mapCollapsed) {
       clampMapPanelToViewport();
-      drawMap();
+      drawMap(true);
     }
   });
 
@@ -3922,26 +3921,27 @@
   });
 
   mapPanel.querySelector('#psm-passive-out').addEventListener('click', () => {
-    radiusWorld = Math.min(10000, Math.round(radiusWorld * 1.3));
+    radiusWorld = Math.min(MAX_MAP_RADIUS, Math.round(radiusWorld * 1.3));
     updateZoomUI();
   });
 
   mapPanel.querySelector('#psm-passive-in').addEventListener('click', () => {
-    radiusWorld = Math.max(450, Math.round(radiusWorld / 1.3));
+    radiusWorld = Math.max(MIN_MAP_RADIUS, Math.round(radiusWorld / 1.3));
     updateZoomUI();
   });
 
   function getEffectiveMapRadius() {
+    let r = radiusWorld;
     if (viewBounds) {
       const halfSpan = Math.max(
         (viewBounds.maxX - viewBounds.minX) / 2,
         (viewBounds.maxY - viewBounds.minY) / 2
       );
       if (Number.isFinite(halfSpan) && halfSpan > 0) {
-        return Math.max(radiusWorld, Math.round(halfSpan * 1.15));
+        r = Math.max(radiusWorld, Math.round(halfSpan * 1.15));
       }
     }
-    return radiusWorld;
+    return Math.min(MAX_MAP_RADIUS, r);
   }
 
   function updateZoomUI() {
@@ -4005,7 +4005,7 @@
   mapCanvas.addEventListener('wheel', e => {
     e.preventDefault();
     const factor = e.deltaY > 0 ? 1.18 : 1 / 1.18;
-    radiusWorld = Math.max(450, Math.min(10000, Math.round(radiusWorld * factor)));
+    radiusWorld = Math.max(MIN_MAP_RADIUS, Math.min(MAX_MAP_RADIUS, Math.round(radiusWorld * factor)));
     updateZoomUI();
   }, { passive: false });
 
@@ -4243,8 +4243,8 @@
     mapPanel.classList.toggle('psm-in-run', shouldShow);
     statsPanel.classList.toggle('psm-in-run', shouldShow);
     if (hpBarEl) {
-      const showHp = (shouldShow || isEditingUI);
-      hpBarEl.classList.toggle('psm-in-run', shouldShow);
+      const showHp = (activeRun || isEditingUI);
+      hpBarEl.classList.toggle('psm-in-run', activeRun);
       if (showHp) {
         clampHpBarToViewport();
         updateCustomHpBar();
@@ -6313,7 +6313,7 @@
     if (now - lastEngineWorldScanAt < 420) return;
     lastEngineWorldScanAt = now;
 
-    const scanR = Math.max(2500, getEffectiveMapRadius() * 1.2);
+    const scanR = Math.min(MAX_MAP_RADIUS, Math.max(2000, getEffectiveMapRadius() * 1.1));
     try {
       if (typeof NS.World.propsInCircle === 'function') {
         const props = NS.World.propsInCircle(centerWorld.x, centerWorld.y, scanR) || [];
@@ -6370,7 +6370,12 @@
     coin: '#ffd23f'
   };
 
-  function drawMap() {
+  let lastMapDrawAt = 0;
+  function drawMap(force = false) {
+    const perfNow = performance.now();
+    if (!force && perfNow - lastMapDrawAt < 33) return;
+    lastMapDrawAt = perfNow;
+
     mapCtx.clearRect(0, 0, SIZE, SIZE);
     mapCtx.fillStyle = '#0d1b3d';
     mapCtx.fillRect(0, 0, SIZE, SIZE);
@@ -6387,6 +6392,9 @@
 
     const effRadius = getEffectiveMapRadius();
     const scale = SIZE / (effRadius * 2);
+    const isWorldVisible = (wx, wy, pad = 48) =>
+      Math.abs(wx - viewCenter.x) <= effRadius + pad &&
+      Math.abs(wy - viewCenter.y) <= effRadius + pad;
 
     mapCtx.save();
     mapCtx.beginPath();
@@ -6394,6 +6402,7 @@
     mapCtx.clip();
 
     for (const z of allyExploredZones.values()) {
+      if (!isWorldVisible(z.x + CHUNK / 2, z.y + CHUNK / 2, CHUNK / 2 + 16)) continue;
       const p = worldToMap(z.x, z.y);
       if (!p) continue;
       const side = CHUNK * scale;
@@ -6408,10 +6417,7 @@
       const cx = chunk.x + CHUNK / 2;
       const cy = chunk.y + CHUNK / 2;
 
-      if (
-        Math.abs(cx - viewCenter.x) > effRadius + CHUNK ||
-        Math.abs(cy - viewCenter.y) > effRadius + CHUNK
-      ) {
+      if (!isWorldVisible(cx, cy, CHUNK / 2 + 16)) {
         continue;
       }
 
@@ -6476,6 +6482,10 @@
       let started = false;
 
       for (const pt of trail) {
+        if (!isWorldVisible(pt.x, pt.y, 80)) {
+          started = false;
+          continue;
+        }
         const p = worldToMap(pt.x, pt.y);
         if (!p || !inBounds(p.x, p.y, 20)) {
           started = false;
@@ -6513,7 +6523,7 @@
         for (const pk of pkList) {
           if (!pk || pk.kind === 'xp') continue;
           const col = PICKUP_COLORS[pk.kind];
-          if (!col) continue;
+          if (!col || !isWorldVisible(pk.x, pk.y, 24)) continue;
           const p = worldToMap(pk.x, pk.y);
           if (p && inBounds(p.x, p.y)) {
             drawBorderedSquare(p.x, p.y, pk.kind === 'pokeball' ? 3.5 : 2.8, col);
@@ -6521,6 +6531,7 @@
         }
       }
       for (const obj of rememberedObjects.values()) {
+        if (!isWorldVisible(obj.x, obj.y, 24)) continue;
         const p = worldToMap(obj.x, obj.y);
         if (p) {
           const isLive = now - obj.lastSeen < 400;
@@ -6531,6 +6542,7 @@
 
     for (const prop of permanentProps.values()) {
       if (prop.ref && (prop.ref.opened || prop.ref.used)) continue;
+      if (!isWorldVisible(prop.x, prop.y, 32)) continue;
       const p = worldToMap(prop.x, prop.y);
       if (p) drawPropMarker(p.x, p.y, prop.type);
     }
@@ -6546,7 +6558,7 @@
           specialList.push(e);
           continue;
         }
-        if (visibility.pokemon) {
+        if (visibility.pokemon && isWorldVisible(e.x, e.y, 24)) {
           const p = worldToMap(e.x, e.y);
           if (p && inBounds(p.x, p.y)) {
             drawDot(p.x, p.y, '#ff5b6e', 1.8, 0.72);
@@ -6574,7 +6586,7 @@
         const isLive = now - ent.lastSeen < 350;
         if (ent.type === 'boss') {
           bossesToDraw.push({ ent, isLive });
-        } else if (visibility.pokemon) {
+        } else if (visibility.pokemon && isWorldVisible(ent.x, ent.y, 24)) {
           const p = worldToMap(ent.x, ent.y);
           if (p) drawPokemonWithDir(p.x, p.y, ent.vx, ent.vy, isLive);
         }
@@ -6606,7 +6618,7 @@
     for (const [lowerNick, ally] of alliesByName.entries()) {
       if (drawnAllyNicks.has(lowerNick)) continue;
       const ap = clampToMapEdge(ally.x, ally.y);
-      if (ap) drawAllyMarker(ap.x, ap.y, ally.vx, ally.vy, ally.name, '#5fe08a', false);
+      if (ap) drawAllyMarker(ap.x, ally.y, ally.vx, ally.vy, ally.name, '#5fe08a', false);
     }
 
     if (visibility.player) {
@@ -6675,10 +6687,10 @@
     } else if (key === 'n') {
       statsFoldBtn.click();
     } else if (event.key === '[') {
-      radiusWorld = Math.min(10000, Math.round(radiusWorld * 1.25));
+      radiusWorld = Math.min(MAX_MAP_RADIUS, Math.round(radiusWorld * 1.25));
       updateZoomUI();
     } else if (event.key === ']') {
-      radiusWorld = Math.max(450, Math.round(radiusWorld / 1.25));
+      radiusWorld = Math.max(MIN_MAP_RADIUS, Math.round(radiusWorld / 1.25));
       updateZoomUI();
     } else if (event.key === 'End' || event.code === 'End' || event.key === 'Fin') {
       event.preventDefault();
@@ -6780,6 +6792,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.8.0 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida con Temas + Supresión HUD Nativo) instalado.');
+  console.info('[PS Minimap] v3.9.0 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida con Temas + Optimización Radar) instalado.');
   }
 })();
