@@ -76,6 +76,15 @@ Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión
 
 ---
 
+## 📥 Descargas Rápidas
+
+| Opción | Enlace |
+| :--- | :--- |
+| **Descarga Directa (Extensión Chrome ZIP)** | [⬇️ Descargar pokesurvivor-mod.zip](https://github.com/ivalactio/pokesurvivor-mod/archive/refs/heads/main.zip) |
+| **Instalación UserScript (Tampermonkey)** | [⚡ Instalar content.js (Raw)](https://raw.githubusercontent.com/ivalactio/pokesurvivor-mod/main/content.js) |
+
+---
+
 ## 📄 Licencia
 
 Este proyecto está bajo la licencia [MIT](LICENSE).
