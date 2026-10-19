@@ -30,6 +30,15 @@ Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión
 
 ---
 
+### 💡 ¿Por qué esta suite? Diseñada para no estorbar
+
+- 🔕 **Control total de la interfaz:** Si en algún momento prefieres una experiencia limpia o jugar sin distracciones, pulsas la tecla **`M`** y todo el HUD del mod se oculta al instante (o la tecla **`B`** / **`N`** para plegar solo el mapa o el panel de daño).
+- 🏷️ **Minimapa con filtros:** Muestra solo lo que te interesa en cada momento (aliados, cofres, jefes, objetos...) con un simple clic en la leyenda.
+- 🔍 **FOV dinámico y natural:** Ajusta el campo de visión en plena partida simplemente usando la rueda del ratón, sin menús intermedios.
+- 📜 **Historial compartible:** Tus runs y builds se quedan guardadas automáticamente para que puedas revisarlas o compartir el resumen directamente con tus colegas.
+
+---
+
 ## ✨ Funcionalidades Destacadas
 
 * 🗺️ **Minimapa en Tiempo Real**  
