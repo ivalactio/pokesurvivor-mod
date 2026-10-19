@@ -1,6 +1,6 @@
-# PokéSurvivor HUD Suite & Historial (v3.8.0)
+# PokéSurvivor HUD Suite & Historial (v3.9.2)
 
-[![Versión](https://img.shields.io/badge/version-3.8.0-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
+[![Versión](https://img.shields.io/badge/version-3.9.2-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
 [![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-yellow.svg)](manifest.json)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Compatible-brightgreen.svg)](https://www.tampermonkey.net/)
 [![Violentmonkey](https://img.shields.io/badge/Violentmonkey-Compatible-orange.svg)](https://violentmonkey.github.io/)
@@ -32,7 +32,7 @@ Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión
 
 ### 💡 ¿Por qué esta suite? Diseñada para no estorbar
 
-- 🔕 **Control total de la interfaz:** Si en algún momento prefieres una experiencia limpia o jugar sin distracciones, pulsas la tecla **`M`** y todo el HUD del mod se oculta al instante (o la tecla **`B`** / **`N`** para plegar solo el mapa o el panel de daño).
+- 🔕 **Control total de la interfaz:** Si en algún momento prefieres una experiencia limpia o jugar sin distracciones, pulsas la tecla **`M`** y todo el HUD del mod se oculta al instante (o la tecla **`B`** / **`N`** para plegar solo el mapa o el panel de daño). La barra de vida y bufos permanecen siempre visibles para mayor seguridad.
 - 🏷️ **Minimapa con filtros:** Muestra solo lo que te interesa en cada momento (aliados, cofres, jefes, objetos...) con un simple clic en la leyenda.
 - 🔍 **FOV dinámico y natural:** Ajusta el campo de visión en plena partida simplemente usando la rueda del ratón, sin menús intermedios.
 - 📜 **Historial compartible:** Tus runs y builds se quedan guardadas automáticamente para que puedas revisarlas o compartir el resumen directamente con tus colegas.
@@ -56,8 +56,11 @@ Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión
   - **Minimalista Nativo**: Barra compacta roja (`#ff5f6d`) con tipografía sombreada y lectura de PS.  
   Compatible tanto en orientación horizontal como vertical.
 
+* ⚡ **Widget de Bufos y Estados Arrastrable**  
+  Contenedor HTML propio e independiente para mejoras de estadísticas temporales (`ATK`, `VEL`, `DEF`, `REG`, `AT.E`) y poderes especiales. Diseñado en píldoras con barra de duración dinámica, posición y escala personalizables desde el editor de interfaz in-game.
+
 * 🧼 **Supresión Limpia de HUD Nativo**  
-  Intercepta y cancela de forma quirúrgica el renderizado de la barra de vida original del juego y sus cápsulas oscuras de fondo en el canvas, evitando superposiciones o sombras residuales sin afectar el renderizado del mapa.
+  Intercepta y cancela de forma quirúrgica el renderizado de la barra de vida original del juego y sus cápsulas oscuras de fondo en el canvas, evitando superposiciones o sombras residuales sin afectar el renderizado del mapa. Atenuación automática detrás de menús y modales.
 
 * 📜 **Historial de Runs y Builds Persistente**  
   Registro automático de cada partida finalizada o abandonada en `localStorage`. Guarda tiempo jugado, nivel alcanzado, derrotados, daño total, DPS máximo, objeto equipado, ataques y árbol de pasivas. Incluye botón **📋 Compartir** para copiar un resumen formateado directamente al portapapeles.
