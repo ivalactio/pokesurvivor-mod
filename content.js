@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.1)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.2)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.1
-// @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida estilo Brawl Stars, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
+// @version      3.9.2
+// @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida y Bufos, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
 // @run-at       document-start
@@ -19,6 +19,7 @@
   const SHOW_MOVES_KEY = 'psm-show-moves-v1';
   const HP_CONFIG_KEY = 'psm_custom_hp_config_v1';
   const HP_CONFIG_FALLBACK_KEY = 'psm-hp-bar-config-v2';
+  const BUFFS_CONFIG_KEY = 'psm_custom_buffs_config_v1';
   const MAP_DETAILS_KEY = 'psm-map-details-v1';
   const MIN_FOV = 0.35;
   const MAX_FOV = 2.5;
@@ -50,6 +51,25 @@
       }
       if (savedHp.theme === 'classic' || savedHp.theme === 'minimal') {
         hpBarConfig.theme = savedHp.theme;
+      }
+    }
+  } catch (_) {}
+
+  const DEFAULT_BUFFS_CONFIG = {
+    x: 18,
+    y: 78,
+    scale: 1.0
+  };
+
+  let buffsBarConfig = { ...DEFAULT_BUFFS_CONFIG };
+  try {
+    const rawBuffs = localStorage.getItem(BUFFS_CONFIG_KEY);
+    if (rawBuffs) {
+      const savedBuffs = JSON.parse(rawBuffs);
+      if (typeof savedBuffs.x === 'number') buffsBarConfig.x = savedBuffs.x;
+      if (typeof savedBuffs.y === 'number') buffsBarConfig.y = savedBuffs.y;
+      if (typeof savedBuffs.scale === 'number') {
+        buffsBarConfig.scale = Math.max(0.6, Math.min(2.5, savedBuffs.scale));
       }
     }
   } catch (_) {}
@@ -2052,23 +2072,50 @@
     }
 
     /* --------------------------------------------------------
-       BARRA DE VIDA PERSONALIZABLE (ESTILO BRAWL STARS)
+       BARRA DE VIDA Y WIDGET DE BUFOS PERSONALIZABLES
        -------------------------------------------------------- */
-    #psm-custom-hp-bar {
+    .scr:not(.hidden) {
+      z-index: 50;
+    }
+
+    #psm-custom-hp-bar,
+    #psm-custom-buffs-bar {
       position: fixed !important;
-      z-index: 890;
+      z-index: 15;
       user-select: none;
       pointer-events: none;
       box-sizing: border-box;
-      transition: box-shadow .2s ease;
+      transition: box-shadow .2s ease, filter .15s ease;
     }
 
-    #psm-custom-hp-bar:not(.psm-in-run):not(.psm-editing-ui) {
+    #psm-custom-hp-bar:not(.psm-in-run):not(.psm-editing-ui),
+    #psm-custom-buffs-bar:not(.psm-in-run):not(.psm-editing-ui) {
       display: none !important;
     }
 
-    #psm-custom-hp-bar.psm-editing-ui {
+    #psm-custom-buffs-bar.psm-empty-buffs:not(.psm-editing-ui) {
+      display: none !important;
+    }
+
+    /* En Pausa, Subida de Nivel, Vínculo, Objeto o Historial: quedan detrás del backdrop y atenuados */
+    #psm-custom-hp-bar.psm-modal-dimmed:not(.psm-editing-ui),
+    #psm-custom-buffs-bar.psm-modal-dimmed:not(.psm-editing-ui) {
+      z-index: 4 !important;
+      filter: brightness(0.45) !important;
+      pointer-events: none !important;
+    }
+
+    #psm-map-panel.psm-modal-dimmed,
+    #psm-stats-panel.psm-modal-dimmed {
+      z-index: 4 !important;
+      filter: brightness(0.45) !important;
+      pointer-events: none !important;
+    }
+
+    #psm-custom-hp-bar.psm-editing-ui,
+    #psm-custom-buffs-bar.psm-editing-ui {
       z-index: 2147483010 !important;
+      filter: none !important;
       pointer-events: auto !important;
       cursor: grab !important;
       outline: 3px dashed var(--psm-gold) !important;
@@ -2077,12 +2124,15 @@
       animation: psm-pulse-border 1.2s infinite alternate ease-in-out !important;
     }
 
-    #psm-custom-hp-bar.psm-editing-ui * {
+    #psm-custom-hp-bar.psm-editing-ui *,
+    #psm-custom-buffs-bar.psm-editing-ui * {
       pointer-events: none !important;
     }
 
     #psm-custom-hp-bar.psm-editing-ui.psm-dragging,
-    #psm-custom-hp-bar.psm-editing-ui:active {
+    #psm-custom-hp-bar.psm-editing-ui:active,
+    #psm-custom-buffs-bar.psm-editing-ui.psm-dragging,
+    #psm-custom-buffs-bar.psm-editing-ui:active {
       cursor: grabbing !important;
       outline-color: #ffffff !important;
       box-shadow: 0 0 28px rgba(255, 255, 255, .9), 0 0 14px var(--psm-gold) !important;
@@ -2109,7 +2159,8 @@
       pointer-events: none;
     }
 
-    #psm-custom-hp-bar.psm-editing-ui .psm-hp-edit-tag {
+    #psm-custom-hp-bar.psm-editing-ui .psm-hp-edit-tag,
+    #psm-custom-buffs-bar.psm-editing-ui .psm-hp-edit-tag {
       display: block;
     }
 
@@ -2426,6 +2477,81 @@
       font: 700 10.5px/1 var(--psm-font);
       color: var(--psm-gold);
       text-shadow: 1.5px 1.5px 0 #0a1430, -1px -1px 0 #0a1430, 1px -1px 0 #0a1430, -1px 1px 0 #0a1430;
+    }
+
+    /* --------------------------------------------------------
+       WIDGET DE BUFOS TEMPORALES Y ESTADOS (#psm-custom-buffs-bar)
+       -------------------------------------------------------- */
+    #psm-custom-buffs-bar {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      padding: 2px;
+      min-height: 22px;
+      max-width: 420px;
+    }
+
+    #psm-buffs-pills-wrap {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .psm-buff-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px 6px 7px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(16, 30, 68, .92), rgba(8, 16, 38, .96));
+      border: 1.5px solid var(--psm-buff-col, #7fe0ff);
+      box-shadow: 0 0 0 1.5px #0b1838, 0 3px 8px rgba(0, 0, 0, .55);
+      font: 700 11.5px/1 var(--psm-font);
+      color: #ffffff;
+      text-shadow: 1.5px 1.5px 0 #0a1430, -1px -1px 0 #0a1430;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .psm-buff-ico {
+      font-size: 11px;
+      line-height: 1;
+      filter: drop-shadow(1px 1px 0 #0a1430);
+    }
+
+    .psm-buff-label {
+      color: var(--psm-buff-col, #7fe0ff);
+      letter-spacing: .03em;
+      font-weight: 700;
+    }
+
+    .psm-buff-timer {
+      color: #eaf2ff;
+      font-size: 10px;
+      opacity: .92;
+      margin-left: 1px;
+    }
+
+    .psm-buff-prog {
+      position: absolute;
+      left: 7px;
+      right: 7px;
+      bottom: 2px;
+      height: 2.5px;
+      background: rgba(255, 255, 255, .16);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .psm-buff-prog > i {
+      display: block;
+      height: 100%;
+      border-radius: 2px;
+      background: var(--psm-buff-col, #7fe0ff);
+      transition: width .12s linear;
     }
 
     /* --------------------------------------------------------
@@ -2773,13 +2899,13 @@
   `;
 
   // ------------------------------------------------------------------
-  // 3. BARRA DE VIDA PERSONALIZABLE (DISEÑO CLÁSICO NATIVO PMD / MINIMALISTA)
+  // 3. BARRA DE VIDA Y WIDGET DE BUFOS PERSONALIZABLES
   // ------------------------------------------------------------------
   const hpBarEl = document.createElement('div');
   hpBarEl.id = 'psm-custom-hp-bar';
   hpBarEl.className = `psm-orient-${hpBarConfig.orientation} psm-theme-${hpBarConfig.theme === 'minimal' ? 'minimal' : 'classic'}`;
   hpBarEl.innerHTML = `
-    <div class="psm-hp-edit-tag">✥ Arrastra para mover</div>
+    <div class="psm-hp-edit-tag">✥ Arrastra vida</div>
     <div class="psm-hp-avatar-wrap">
       <span class="psm-hp-avatar" id="psm-hp-avatar-icon">⚡</span>
       <span class="psm-hp-badge" id="psm-hp-lvl-badge">Nv. 1</span>
@@ -2800,22 +2926,36 @@
     </div>
   `;
 
+  const buffsBarEl = document.createElement('div');
+  buffsBarEl.id = 'psm-custom-buffs-bar';
+  buffsBarEl.className = 'psm-empty-buffs';
+  buffsBarEl.innerHTML = `
+    <div class="psm-hp-edit-tag">✥ Arrastra bufos</div>
+    <div id="psm-buffs-pills-wrap"></div>
+  `;
+
   const uiEditorOverlay = document.createElement('div');
   uiEditorOverlay.id = 'psm-ui-editor-overlay';
   uiEditorOverlay.innerHTML = `
     <div class="psm-editor-toolbar">
       <div class="psm-editor-title">
         <span>🛠️ EDITOR DE INTERFAZ IN-GAME</span>
-        <span class="psm-editor-subtitle">Arrastra la barra de vida a cualquier posición de la pantalla</span>
+        <span class="psm-editor-subtitle">Arrastra la barra de vida y los bufos a cualquier posición de la pantalla (Rueda para escalar)</span>
       </div>
       <div class="psm-editor-actions">
         <button id="psm-ui-theme-btn" class="psm-editor-tool-btn" type="button">🎨 Tema: ${hpBarConfig.theme === 'minimal' ? 'Minimalista Nativo' : 'Clásico PMD'}</button>
         <button id="psm-ui-orient-btn" class="psm-editor-tool-btn" type="button">🔄 Orientación: ${hpBarConfig.orientation === 'horizontal' ? 'Horizontal' : 'Vertical'}</button>
         <div class="psm-editor-scale-ctrl">
-          <span class="psm-scale-label">Tamaño:</span>
+          <span class="psm-scale-label">Vida:</span>
           <button id="psm-ui-scale-dec" class="psm-editor-tool-btn" type="button" style="height:22px;padding:0 6px;">−</button>
           <span id="psm-ui-scale-val" class="psm-scale-val">${Math.round(hpBarConfig.scale * 100)}%</span>
           <button id="psm-ui-scale-inc" class="psm-editor-tool-btn" type="button" style="height:22px;padding:0 6px;">+</button>
+        </div>
+        <div class="psm-editor-scale-ctrl">
+          <span class="psm-scale-label">Bufos:</span>
+          <button id="psm-ui-buffs-scale-dec" class="psm-editor-tool-btn" type="button" style="height:22px;padding:0 6px;">−</button>
+          <span id="psm-ui-buffs-scale-val" class="psm-scale-val">${Math.round(buffsBarConfig.scale * 100)}%</span>
+          <button id="psm-ui-buffs-scale-inc" class="psm-editor-tool-btn" type="button" style="height:22px;padding:0 6px;">+</button>
         </div>
         <button id="psm-ui-reset-btn" class="psm-editor-tool-btn" type="button">↺ Restablecer</button>
         <button id="psm-ui-save-btn" class="psm-editor-save-btn" type="button">✓ Guardar y Salir</button>
@@ -2828,6 +2968,7 @@
   gameContainer.appendChild(mapPanel);
   gameContainer.appendChild(statsPanel);
   gameContainer.appendChild(hpBarEl);
+  gameContainer.appendChild(buffsBarEl);
   gameContainer.appendChild(uiEditorOverlay);
 
   // Evitar que clics o interacciones sobre los paneles se propaguen al canvas del juego
@@ -2836,6 +2977,7 @@
     mapPanel.addEventListener(evtName, e => e.stopPropagation());
     statsPanel.addEventListener(evtName, e => e.stopPropagation());
     hpBarEl.addEventListener(evtName, e => e.stopPropagation());
+    buffsBarEl.addEventListener(evtName, e => e.stopPropagation());
     if (editorToolbar) editorToolbar.addEventListener(evtName, e => e.stopPropagation());
   }
 
@@ -3242,9 +3384,25 @@
   }
 
   // ------------------------------------------------------------------
-  // CONTROL Y LÓGICA DEL EDITOR DE UI + BARRA DE VIDA BRAWL STARS (v3.7)
+  // CONTROL Y LÓGICA DEL EDITOR DE UI + BARRA DE VIDA Y WIDGET DE BUFOS
   // ------------------------------------------------------------------
   let wasPauseHiddenForEdit = false;
+  const buffMaxDurMap = new Map();
+  const canvasCapturedBuffs = new Map();
+  let lastRenderedBuffsSig = '';
+
+  const BUFF_META = {
+    atk: { label: 'ATK', icon: '⚔️', color: '#ff6b4d' },
+    patk: { label: 'ATK', icon: '⚔️', color: '#ff6b4d' },
+    satk: { label: 'AT.E', icon: '✨', color: '#c47bff' },
+    spd: { label: 'VEL', icon: '⚡', color: '#7fe0ff' },
+    def: { label: 'DEF', icon: '🛡️', color: '#b0b8c8' },
+    regen: { label: 'REG', icon: '💚', color: '#5fe08a' },
+    xpmagnet: { label: 'IMÁN XP', icon: '🧲', color: '#a855f7' },
+    frenzy: { label: 'FRENESÍ', icon: '💢', color: '#ff5f6d' },
+    CritBoost: { label: 'CRÍT+', icon: '🎯', color: '#ffd23f' },
+    Haste: { label: 'PRISA', icon: '💨', color: '#67e8f9' }
+  };
 
   function openUiEditor() {
     const pauseScr = document.getElementById('scr-pause');
@@ -3257,9 +3415,16 @@
 
     isEditingUI = true;
     uiEditorOverlay.classList.add('open');
+    hpBarEl.classList.remove('psm-modal-dimmed');
     hpBarEl.classList.add('psm-editing-ui');
+    if (buffsBarEl) {
+      buffsBarEl.classList.remove('psm-modal-dimmed');
+      buffsBarEl.classList.add('psm-editing-ui');
+    }
     applyHpBarConfig();
+    applyBuffsBarConfig();
     updateCustomHpBar(true);
+    updateCustomBuffsBar(true);
   }
 
   function closeUiEditor(save = true) {
@@ -3267,12 +3432,20 @@
       isDraggingHpBar = false;
       hpBarEl.classList.remove('psm-dragging');
     }
+    if (isDraggingBuffsBar && buffsBarEl) {
+      isDraggingBuffsBar = false;
+      buffsBarEl.classList.remove('psm-dragging');
+    }
     if (save) {
       saveHpBarConfig();
+      saveBuffsBarConfig();
     }
     isEditingUI = false;
     uiEditorOverlay.classList.remove('open');
     hpBarEl.classList.remove('psm-editing-ui');
+    if (buffsBarEl) {
+      buffsBarEl.classList.remove('psm-editing-ui');
+    }
 
     if (wasPauseHiddenForEdit) {
       const pauseScr = document.getElementById('scr-pause');
@@ -3288,6 +3461,12 @@
       const jsonStr = JSON.stringify(hpBarConfig);
       localStorage.setItem(HP_CONFIG_KEY, jsonStr);
       localStorage.setItem(HP_CONFIG_FALLBACK_KEY, jsonStr);
+    } catch (_) {}
+  }
+
+  function saveBuffsBarConfig() {
+    try {
+      localStorage.setItem(BUFFS_CONFIG_KEY, JSON.stringify(buffsBarConfig));
     } catch (_) {}
   }
 
@@ -3308,6 +3487,25 @@
     hpBarEl.style.setProperty('position', 'fixed', 'important');
     hpBarEl.style.setProperty('left', `${Math.round(hpBarConfig.x)}px`, 'important');
     hpBarEl.style.setProperty('top', `${Math.round(hpBarConfig.y)}px`, 'important');
+  }
+
+  function clampBuffsBarToViewport() {
+    if (!buffsBarEl) return;
+    const vw = window.innerWidth || 800;
+    const vh = window.innerHeight || 600;
+    const rect = buffsBarEl.getBoundingClientRect();
+    const w = (rect.width > 0) ? rect.width : 160 * buffsBarConfig.scale;
+    const h = (rect.height > 0) ? rect.height : 28 * buffsBarConfig.scale;
+
+    const maxX = Math.max(0, vw - w);
+    const maxY = Math.max(0, vh - h);
+
+    buffsBarConfig.x = Math.max(0, Math.min(maxX, buffsBarConfig.x));
+    buffsBarConfig.y = Math.max(0, Math.min(maxY, buffsBarConfig.y));
+
+    buffsBarEl.style.setProperty('position', 'fixed', 'important');
+    buffsBarEl.style.setProperty('left', `${Math.round(buffsBarConfig.x)}px`, 'important');
+    buffsBarEl.style.setProperty('top', `${Math.round(buffsBarConfig.y)}px`, 'important');
   }
 
   function applyHpBarConfig() {
@@ -3338,9 +3536,29 @@
     }
   }
 
+  function applyBuffsBarConfig() {
+    if (!buffsBarEl) return;
+    buffsBarEl.style.setProperty('position', 'fixed', 'important');
+    buffsBarEl.style.setProperty('left', `${Math.round(buffsBarConfig.x)}px`, 'important');
+    buffsBarEl.style.setProperty('top', `${Math.round(buffsBarConfig.y)}px`, 'important');
+    buffsBarEl.style.setProperty('transform', `scale(${buffsBarConfig.scale})`, 'important');
+    buffsBarEl.style.setProperty('transform-origin', 'top left', 'important');
+
+    clampBuffsBarToViewport();
+
+    const buffsScaleValEl = uiEditorOverlay.querySelector('#psm-ui-buffs-scale-val');
+    if (buffsScaleValEl) {
+      buffsScaleValEl.textContent = `${Math.round(buffsBarConfig.scale * 100)}%`;
+    }
+  }
+
   let isDraggingHpBar = false;
   let hpDragOffsetX = 0;
   let hpDragOffsetY = 0;
+
+  let isDraggingBuffsBar = false;
+  let buffsDragOffsetX = 0;
+  let buffsDragOffsetY = 0;
 
   hpBarEl.addEventListener('pointerdown', e => {
     if (!isEditingUI) return;
@@ -3360,34 +3578,94 @@
     } catch (_) {}
   });
 
-  function onHpBarPointerMove(e) {
-    if (!isDraggingHpBar || !isEditingUI) return;
+  buffsBarEl.addEventListener('pointerdown', e => {
+    if (!isEditingUI) return;
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
 
-    hpBarConfig.x = e.clientX - hpDragOffsetX;
-    hpBarConfig.y = e.clientY - hpDragOffsetY;
-    clampHpBarToViewport();
+    isDraggingBuffsBar = true;
+    buffsBarEl.classList.add('psm-dragging');
+
+    const rect = buffsBarEl.getBoundingClientRect();
+    buffsDragOffsetX = e.clientX - rect.left;
+    buffsDragOffsetY = e.clientY - rect.top;
+
+    try {
+      buffsBarEl.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  });
+
+  hpBarEl.addEventListener('wheel', e => {
+    if (!isEditingUI) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const step = e.deltaY < 0 ? 0.1 : -0.1;
+    hpBarConfig.scale = Math.max(0.6, Math.min(2.0, Math.round((hpBarConfig.scale + step) * 10) / 10));
+    applyHpBarConfig();
+    saveHpBarConfig();
+  }, { passive: false });
+
+  buffsBarEl.addEventListener('wheel', e => {
+    if (!isEditingUI) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const step = e.deltaY < 0 ? 0.1 : -0.1;
+    buffsBarConfig.scale = Math.max(0.6, Math.min(2.0, Math.round((buffsBarConfig.scale + step) * 10) / 10));
+    applyBuffsBarConfig();
+    saveBuffsBarConfig();
+  }, { passive: false });
+
+  function onHpBarPointerMove(e) {
+    if (isDraggingHpBar && isEditingUI) {
+      e.preventDefault();
+      e.stopPropagation();
+      hpBarConfig.x = e.clientX - hpDragOffsetX;
+      hpBarConfig.y = e.clientY - hpDragOffsetY;
+      clampHpBarToViewport();
+      return;
+    }
+    if (isDraggingBuffsBar && isEditingUI) {
+      e.preventDefault();
+      e.stopPropagation();
+      buffsBarConfig.x = e.clientX - buffsDragOffsetX;
+      buffsBarConfig.y = e.clientY - buffsDragOffsetY;
+      clampBuffsBarToViewport();
+    }
   }
 
   function onHpBarPointerUp(e) {
-    if (!isDraggingHpBar) return;
-    isDraggingHpBar = false;
-    hpBarEl.classList.remove('psm-dragging');
-
-    try {
-      if (e && e.pointerId !== undefined && hpBarEl.hasPointerCapture && hpBarEl.hasPointerCapture(e.pointerId)) {
-        hpBarEl.releasePointerCapture(e.pointerId);
-      }
-    } catch (_) {}
-
-    clampHpBarToViewport();
-    saveHpBarConfig();
+    if (isDraggingHpBar) {
+      isDraggingHpBar = false;
+      hpBarEl.classList.remove('psm-dragging');
+      try {
+        if (e && e.pointerId !== undefined && hpBarEl.hasPointerCapture && hpBarEl.hasPointerCapture(e.pointerId)) {
+          hpBarEl.releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
+      clampHpBarToViewport();
+      saveHpBarConfig();
+    }
+    if (isDraggingBuffsBar) {
+      isDraggingBuffsBar = false;
+      buffsBarEl.classList.remove('psm-dragging');
+      try {
+        if (e && e.pointerId !== undefined && buffsBarEl.hasPointerCapture && buffsBarEl.hasPointerCapture(e.pointerId)) {
+          buffsBarEl.releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
+      clampBuffsBarToViewport();
+      saveBuffsBarConfig();
+    }
   }
 
   hpBarEl.addEventListener('pointermove', onHpBarPointerMove);
   hpBarEl.addEventListener('pointerup', onHpBarPointerUp);
   hpBarEl.addEventListener('pointercancel', onHpBarPointerUp);
+
+  buffsBarEl.addEventListener('pointermove', onHpBarPointerMove);
+  buffsBarEl.addEventListener('pointerup', onHpBarPointerUp);
+  buffsBarEl.addEventListener('pointercancel', onHpBarPointerUp);
 
   window.addEventListener('pointermove', onHpBarPointerMove, { passive: false });
   window.addEventListener('pointerup', onHpBarPointerUp, { passive: false });
@@ -3398,6 +3676,8 @@
   const uiOrientBtn = uiEditorOverlay.querySelector('#psm-ui-orient-btn');
   const uiScaleDecBtn = uiEditorOverlay.querySelector('#psm-ui-scale-dec');
   const uiScaleIncBtn = uiEditorOverlay.querySelector('#psm-ui-scale-inc');
+  const uiBuffsScaleDecBtn = uiEditorOverlay.querySelector('#psm-ui-buffs-scale-dec');
+  const uiBuffsScaleIncBtn = uiEditorOverlay.querySelector('#psm-ui-buffs-scale-inc');
   const uiResetBtn = uiEditorOverlay.querySelector('#psm-ui-reset-btn');
   const uiSaveBtn = uiEditorOverlay.querySelector('#psm-ui-save-btn');
 
@@ -3439,13 +3719,35 @@
     });
   }
 
+  if (uiBuffsScaleDecBtn) {
+    uiBuffsScaleDecBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      buffsBarConfig.scale = Math.max(0.6, Math.round((buffsBarConfig.scale - 0.1) * 10) / 10);
+      applyBuffsBarConfig();
+      saveBuffsBarConfig();
+    });
+  }
+
+  if (uiBuffsScaleIncBtn) {
+    uiBuffsScaleIncBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      buffsBarConfig.scale = Math.min(2.0, Math.round((buffsBarConfig.scale + 0.1) * 10) / 10);
+      applyBuffsBarConfig();
+      saveBuffsBarConfig();
+    });
+  }
+
   if (uiResetBtn) {
     uiResetBtn.addEventListener('click', e => {
       e.stopPropagation();
       hpBarConfig = { ...DEFAULT_HP_CONFIG };
+      buffsBarConfig = { ...DEFAULT_BUFFS_CONFIG };
       applyHpBarConfig();
+      applyBuffsBarConfig();
       updateCustomHpBar(true);
+      updateCustomBuffsBar(true);
       saveHpBarConfig();
+      saveBuffsBarConfig();
     });
   }
 
@@ -3454,6 +3756,151 @@
       e.stopPropagation();
       closeUiEditor(true);
     });
+  }
+
+  function collectActivePlayerBuffs() {
+    const items = [];
+    const seenLabels = new Set();
+    const engPl = getEngineLocalPlayer();
+
+    if (engPl && engPl.buffs && typeof engPl.buffs === 'object') {
+      for (const k of Object.keys(engPl.buffs)) {
+        const b = engPl.buffs[k];
+        const meta = BUFF_META[k] || { label: k.toUpperCase(), icon: '⚡', color: '#7fe0ff' };
+        if (b && typeof b === 'object') {
+          const n = b.n || 0;
+          const t = typeof b.t === 'number' ? b.t : 0;
+          if (n > 0) {
+            const prevMax = buffMaxDurMap.get(k) || 0;
+            const maxT = Math.max(prevMax, t, 1);
+            buffMaxDurMap.set(k, maxT);
+            const pct = t > 0 ? Math.max(5, Math.min(100, Math.round((t / maxT) * 100))) : 100;
+            const labelTxt = `${meta.label} ×${n}`;
+            seenLabels.add(meta.label.toUpperCase());
+            items.push({
+              key: k,
+              icon: meta.icon,
+              label: labelTxt,
+              timeStr: t > 0 ? `${Math.ceil(t)}s` : '',
+              pct,
+              color: meta.color
+            });
+          } else {
+            buffMaxDurMap.delete(k);
+          }
+        } else if (typeof b === 'number' && b > 0) {
+          const prevMax = buffMaxDurMap.get(k) || 0;
+          const maxT = Math.max(prevMax, b, 1);
+          buffMaxDurMap.set(k, maxT);
+          const pct = Math.max(5, Math.min(100, Math.round((b / maxT) * 100)));
+          seenLabels.add(meta.label.toUpperCase());
+          items.push({
+            key: k,
+            icon: meta.icon,
+            label: meta.label,
+            timeStr: `${Math.ceil(b)}s`,
+            pct,
+            color: meta.color
+          });
+        }
+      }
+    }
+
+    if (engPl && engPl.power && typeof engPl.power === 'object' && engPl.power.t > 0) {
+      const p = engPl.power;
+      const pName = (p.def && p.def.name) ? String(p.def.name).toUpperCase() : 'PODER';
+      const pCol = (p.def && p.def.color) || '#ffd23f';
+      const maxDur = Math.max(p.dur || 0, buffMaxDurMap.get('__power') || 0, p.t, 1);
+      buffMaxDurMap.set('__power', maxDur);
+      const pct = Math.max(5, Math.min(100, Math.round((p.t / maxDur) * 100)));
+      seenLabels.add(pName);
+      items.push({
+        key: '__power',
+        icon: '🌟',
+        label: pName,
+        timeStr: `${Math.ceil(p.t)}s`,
+        pct,
+        color: pCol
+      });
+    } else {
+      buffMaxDurMap.delete('__power');
+    }
+
+    if (engPl && typeof engPl.slowT === 'number' && engPl.slowT > 0) {
+      const maxSlow = Math.max(buffMaxDurMap.get('__slow') || 0, engPl.slowT, 1);
+      buffMaxDurMap.set('__slow', maxSlow);
+      const pct = Math.max(5, Math.min(100, Math.round((engPl.slowT / maxSlow) * 100)));
+      items.push({
+        key: '__slow',
+        icon: '❄️',
+        label: 'LENTO',
+        timeStr: `${Math.ceil(engPl.slowT)}s`,
+        pct,
+        color: '#60a5fa'
+      });
+    } else {
+      buffMaxDurMap.delete('__slow');
+    }
+
+    // Fallback por intercepción de textos de bufos en el Canvas
+    const nowPerf = performance.now();
+    for (const [capKey, cap] of canvasCapturedBuffs.entries()) {
+      if (nowPerf - cap.seenAt > 450) {
+        canvasCapturedBuffs.delete(capKey);
+        continue;
+      }
+      if (seenLabels.has(cap.prefix)) continue;
+      items.push({
+        key: `cap_${capKey}`,
+        icon: cap.icon || '⚡',
+        label: cap.label,
+        timeStr: cap.timeStr || '',
+        pct: 100,
+        color: cap.color || '#7fe0ff'
+      });
+    }
+
+    if (isEditingUI && items.length === 0) {
+      return [
+        { key: 'sample_spd', icon: '⚡', label: 'VEL ×1', timeStr: '5s', pct: 78, color: '#7fe0ff' },
+        { key: 'sample_atk', icon: '⚔️', label: 'ATK ×2', timeStr: '4s', pct: 62, color: '#ff6b4d' },
+        { key: 'sample_def', icon: '🛡️', label: 'DEF ×1', timeStr: '6s', pct: 85, color: '#b0b8c8' }
+      ];
+    }
+
+    return items;
+  }
+
+  function updateCustomBuffsBar(forceRender = false) {
+    if (!buffsBarEl) return;
+    if (!activeRun && !isEditingUI) {
+      buffsBarEl.classList.add('psm-empty-buffs');
+      return;
+    }
+
+    const wrap = buffsBarEl.querySelector('#psm-buffs-pills-wrap');
+    if (!wrap) return;
+
+    const items = collectActivePlayerBuffs();
+    buffsBarEl.classList.toggle('psm-empty-buffs', items.length === 0 && !isEditingUI);
+
+    const sig = items.map(it => `${it.key}:${it.label}:${it.timeStr}:${it.pct}:${it.color}`).join('|');
+    if (!forceRender && sig === lastRenderedBuffsSig) return;
+    lastRenderedBuffsSig = sig;
+
+    if (items.length === 0) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    wrap.innerHTML = items.map(it => `
+      <div class="psm-buff-pill" style="--psm-buff-col:${escapeHtml(it.color)}">
+        <span class="psm-buff-ico">${it.icon}</span>
+        <span class="psm-buff-label">${escapeHtml(it.label)}</span>
+        ${it.timeStr ? `<span class="psm-buff-timer">${escapeHtml(it.timeStr)}</span>` : ''}
+        <span class="psm-buff-prog"><i style="width:${it.pct}%"></i></span>
+      </div>
+    `).join('');
   }
 
   function updateCustomHpBar(forceSample = false) {
@@ -3579,8 +4026,9 @@
     }
   }
 
-  // Inicializar estado de la barra de vida
+  // Inicializar estado de la barra de vida y widget de bufos
   applyHpBarConfig();
+  applyBuffsBarConfig();
 
   const statsHead = statsPanel.querySelector('#psm-stats-head');
   const statsFoldBtn = statsPanel.querySelector('#psm-stats-fold');
@@ -4184,6 +4632,9 @@
     // Reset estado de motor por partida (Daño por ataque, Co-op, Grietas, XP)
     engineMoveDmg.clear();
     coopDamageRows.clear();
+    buffMaxDurMap.clear();
+    canvasCapturedBuffs.clear();
+    lastRenderedBuffsSig = '';
     engineRunTime = 0;
     lastClockTickAt = performance.now();
     riftState = { timer: RIFT_EVERY, fails: 0, open: false };
@@ -4238,6 +4689,24 @@
     return true;
   }
 
+  function isAnyModalOrOverlayOpen() {
+    if (isEditingUI) return false;
+    if (historyModal && historyModal.classList.contains('open')) return true;
+    for (const id of ['scr-pause', 'scr-levelup', 'scr-bond', 'scr-item', 'scr-over', 'scr-settings']) {
+      const el = document.getElementById(id);
+      if (el && isVisible(el)) return true;
+    }
+    return false;
+  }
+
+  function syncHudModalDimming() {
+    const dimmed = isAnyModalOrOverlayOpen();
+    if (hpBarEl) hpBarEl.classList.toggle('psm-modal-dimmed', dimmed);
+    if (buffsBarEl) buffsBarEl.classList.toggle('psm-modal-dimmed', dimmed);
+    if (mapPanel) mapPanel.classList.toggle('psm-modal-dimmed', dimmed);
+    if (statsPanel) statsPanel.classList.toggle('psm-modal-dimmed', dimmed);
+  }
+
   function updateHudVisibility() {
     const shouldShow = activeRun && !hiddenByUser;
     mapPanel.classList.toggle('psm-in-run', shouldShow);
@@ -4250,6 +4719,15 @@
         updateCustomHpBar();
       }
     }
+    if (buffsBarEl) {
+      const showBuffs = (activeRun || isEditingUI);
+      buffsBarEl.classList.toggle('psm-in-run', activeRun);
+      if (showBuffs) {
+        clampBuffsBarToViewport();
+        updateCustomBuffsBar();
+      }
+    }
+    syncHudModalDimming();
     if (shouldShow) {
       clampMapPanelToViewport();
       clampStatsPanelToViewport();
@@ -5025,11 +5503,23 @@
 
     if (p.buffs) {
       for (const k in p.buffs) {
-        const t = p.buffs[k];
-        if (t > 0) {
-          rows.push(`<div class="kv"><span>⚡ ${escapeHtml(BUFF_NAMES[k] || k)}</span><b>${Math.ceil(t)} s</b></div>`);
+        const b = p.buffs[k];
+        const meta = BUFF_META[k];
+        const bName = (meta && meta.label) || BUFF_NAMES[k] || k;
+        if (b && typeof b === 'object') {
+          if ((b.n || 0) > 0) {
+            const tPart = b.t > 0 ? ` (${Math.ceil(b.t)} s)` : '';
+            rows.push(`<div class="kv"><span>⚡ ${escapeHtml(bName)}</span><b>×${b.n}${escapeHtml(tPart)}</b></div>`);
+          }
+        } else if (typeof b === 'number' && b > 0) {
+          rows.push(`<div class="kv"><span>⚡ ${escapeHtml(bName)}</span><b>${Math.ceil(b)} s</b></div>`);
         }
       }
+    }
+
+    if (p.power && p.power.t > 0) {
+      const pName = (p.power.def && p.power.def.name) || 'Poder';
+      rows.push(`<div class="kv"><span>🌟 ${escapeHtml(pName)}</span><b>${Math.ceil(p.power.t)} s</b></div>`);
     }
 
     if (p.item && NS && NS.Items && NS.Items.BY && NS.Items.BY[p.item]) {
@@ -5825,28 +6315,71 @@
     return { left: 0, top: 0 };
   }
 
-  // Detecta exclusivamente la banda de la barra de vida nativa del jugador (nombre y=30, nivel y=46,
-  // cápsula y barra HP x=64..232 y=37..48, texto HP y=46), excluyendo la barra de XP superior (y=0..7)
-  // y excluyendo la fila de bufos temporales / estados (y=54..69, texto y=65) para que conserven su render original.
+  // Detecta toda la esquina superior izquierda del HUD nativo (nombre, nivel, cápsula y barra de vida,
+  // y píldoras/fondos oscuros de bufos y estados en X: [-10, 350], Y: [8, 130]),
+  // excluyendo siempre la barra de XP de ancho completo (y=0..7) y cualquier elemento del mundo.
   function isNativePlayerHudTarget(ctx, x, y, w = 0, h = 0) {
-    if (!activeRun || !ctx || isWorldTransform(ctx)) return false;
+    if (!ctx || isWorldTransform(ctx)) return false;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const bw = Number.isFinite(w) ? Math.abs(w) : 0;
     const bh = Number.isFinite(h) ? Math.abs(h) : 0;
-    if (bw > 260 || bh > 36) return false;
+    if (bw > 350 || bh > 125) return false;
+    if (y < 8 && bh <= 9) return false;
     const sa = getNativeHudSafeOffsets();
-    const minX = 8 + sa.left;
-    const maxX = 248 + sa.left;
-    const minY = 22 + sa.top;
-    const maxY = 50 + sa.top;
+    const minX = -10;
+    const maxX = 350 + sa.left;
+    const minY = 8 + sa.top;
+    const maxY = 130 + sa.top;
     return (
       x >= minX &&
       x <= maxX &&
       y >= minY &&
       y <= maxY &&
-      (x + bw) <= maxX + 12 &&
-      (y + bh) <= maxY + 2
+      (x + bw) <= maxX + 20 &&
+      (y + bh) <= maxY + 15
     );
+  }
+
+  function captureCanvasBuffText(str, x, y, ctx) {
+    if (!str || !ctx) return;
+    const sa = getNativeHudSafeOffsets();
+    if (x < 0 || x > 350 + sa.left || y < 48 + sa.top || y > 130 + sa.top) return;
+
+    const stackMatch = str.match(/^([A-ZÁÉÍÓÚÑ.]+)\s*[×x](\d+)$/i);
+    const timerMatch = !stackMatch ? str.match(/^(.+?)\s+(\d+)\s*s$/i) : null;
+    if (!stackMatch && !timerMatch) return;
+
+    const rawColor = String(ctx.fillStyle || '#7fe0ff');
+    const color = /^#[0-9a-f]{3,8}$|^rgb/i.test(rawColor) ? rawColor : '#7fe0ff';
+
+    if (stackMatch) {
+      const prefix = stackMatch[1].toUpperCase();
+      let icon = '⚡';
+      if (prefix === 'ATK') icon = '⚔️';
+      else if (prefix === 'AT.E') icon = '✨';
+      else if (prefix === 'VEL') icon = '⚡';
+      else if (prefix === 'DEF') icon = '🛡️';
+      else if (prefix === 'REG') icon = '💚';
+      canvasCapturedBuffs.set(prefix, {
+        prefix,
+        icon,
+        label: `${prefix} ×${stackMatch[2]}`,
+        timeStr: '',
+        color,
+        seenAt: performance.now()
+      });
+    } else if (timerMatch) {
+      const prefix = timerMatch[1].trim().toUpperCase();
+      if (/^(GRIETA|OLA|WAVE)$/i.test(prefix)) return;
+      canvasCapturedBuffs.set(prefix, {
+        prefix,
+        icon: '🌟',
+        label: prefix,
+        timeStr: `${timerMatch[2]}s`,
+        color,
+        seenAt: performance.now()
+      });
+    }
   }
 
   const originalDrawImage = gameCtx.drawImage;
@@ -5856,13 +6389,16 @@
   const originalFillText = gameCtx.fillText;
   const originalStrokeText = gameCtx.strokeText;
   const originalBeginPath = gameCtx.beginPath;
+  const originalClosePath = gameCtx.closePath;
   const originalMoveTo = gameCtx.moveTo;
+  const originalLineTo = gameCtx.lineTo;
   const originalArcTo = gameCtx.arcTo;
   const originalRoundRect = gameCtx.roundRect;
   const originalRect = gameCtx.rect;
   const originalArc = gameCtx.arc;
   const originalFill = gameCtx.fill;
   const originalStroke = gameCtx.stroke;
+  const originalClip = gameCtx.clip;
 
   try {
     gameCtx.drawImage = function(image, ...args) {
@@ -5975,9 +6511,22 @@
         try {
           if (!isWorldTransform(this) && isNativePlayerHudTarget(this, x, y, 0, 0)) {
             this.__psmSuppressPath = true;
+            return;
           }
         } catch (_) {}
         return originalMoveTo.apply(this, arguments);
+      };
+    }
+
+    if (typeof originalLineTo === 'function') {
+      gameCtx.lineTo = function(x, y) {
+        try {
+          if (!isWorldTransform(this) && (this.__psmSuppressPath || isNativePlayerHudTarget(this, x, y, 0, 0))) {
+            this.__psmSuppressPath = true;
+            return;
+          }
+        } catch (_) {}
+        return originalLineTo.apply(this, arguments);
       };
     }
 
@@ -5986,9 +6535,10 @@
         try {
           if (
             !isWorldTransform(this) &&
-            (isNativePlayerHudTarget(this, x1, y1, 0, 0) || isNativePlayerHudTarget(this, x2, y2, 0, 0))
+            (this.__psmSuppressPath || isNativePlayerHudTarget(this, x1, y1, 0, 0) || isNativePlayerHudTarget(this, x2, y2, 0, 0))
           ) {
             this.__psmSuppressPath = true;
+            return;
           }
         } catch (_) {}
         return originalArcTo.apply(this, arguments);
@@ -6000,6 +6550,7 @@
         try {
           if (!isWorldTransform(this) && isNativePlayerHudTarget(this, x, y, w, h)) {
             this.__psmSuppressPath = true;
+            return;
           }
         } catch (_) {}
         return originalRoundRect.apply(this, arguments);
@@ -6011,6 +6562,7 @@
         try {
           if (!isWorldTransform(this) && isNativePlayerHudTarget(this, x, y, w, h)) {
             this.__psmSuppressPath = true;
+            return;
           }
         } catch (_) {}
         return originalRect.apply(this, arguments);
@@ -6023,9 +6575,21 @@
           const rad = Number.isFinite(r) ? Math.abs(r) : 0;
           if (!isWorldTransform(this) && isNativePlayerHudTarget(this, x - rad, y - rad, rad * 2, rad * 2)) {
             this.__psmSuppressPath = true;
+            return;
           }
         } catch (_) {}
         return originalArc.apply(this, arguments);
+      };
+    }
+
+    if (typeof originalClosePath === 'function') {
+      gameCtx.closePath = function() {
+        try {
+          if (this.__psmSuppressPath && !isWorldTransform(this)) {
+            return;
+          }
+        } catch (_) {}
+        return originalClosePath.apply(this, arguments);
       };
     }
 
@@ -6051,27 +6615,43 @@
       };
     }
 
+    if (typeof originalClip === 'function') {
+      gameCtx.clip = function() {
+        try {
+          if (this.__psmSuppressPath && !isWorldTransform(this)) {
+            return;
+          }
+        } catch (_) {}
+        return originalClip.apply(this, arguments);
+      };
+    }
+
     gameCtx.fillText = function(text, x, y, ...rest) {
       try {
-        if (activeRun && text !== undefined && text !== null) {
+        if (text !== undefined && text !== null) {
           const str = String(text).trim();
           if (isWorldTransform(this)) {
-            if (/^\d{1,5}[!crit]*$/i.test(str)) {
-              const val = parseInt(str, 10);
-              if (Number.isFinite(val) && val > 0 && val < 99999) {
-                recordFloatingDamage(val, x, y, this.fillStyle);
+            if (activeRun) {
+              if (/^\d{1,5}[!crit]*$/i.test(str)) {
+                const val = parseInt(str, 10);
+                if (Number.isFinite(val) && val > 0 && val < 99999) {
+                  recordFloatingDamage(val, x, y, this.fillStyle);
+                }
+              } else if (
+                str.length >= 2 &&
+                str.length <= 18 &&
+                /^[a-zA-Z0-9_áéíóúÁÉÍÓÚñÑ-]+$/.test(str) &&
+                /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(str) &&
+                !/^(crit|miss|fallo|bloqueo|inmune|nv\.?\s*\d+|lv\.?\s*\d+)$/i.test(str)
+              ) {
+                recordAllyByNick(str, x, y);
               }
-            } else if (
-              str.length >= 2 &&
-              str.length <= 18 &&
-              /^[a-zA-Z0-9_áéíóúÁÉÍÓÚñÑ-]+$/.test(str) &&
-              /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(str) &&
-              !/^(crit|miss|fallo|bloqueo|inmune|nv\.?\s*\d+|lv\.?\s*\d+)$/i.test(str)
-            ) {
-              recordAllyByNick(str, x, y);
             }
           } else {
-            inspectCanvasHudTextForStarterMoves(str, x, y, this);
+            if (activeRun) {
+              inspectCanvasHudTextForStarterMoves(str, x, y, this);
+              captureCanvasBuffText(str, x, y, this);
+            }
             if (isNativePlayerHudTarget(this, x, y, 0, 0)) {
               return;
             }
@@ -6755,13 +7335,14 @@
   window.addEventListener('wheel', event => {
     if (!activeRun) return;
 
-    // No aplicar zoom de FOV si el usuario hace scroll dentro de los paneles HUD, modal de historial, barra de vida, editor o gacha
+    // No aplicar zoom de FOV si el usuario hace scroll dentro de los paneles HUD, modal de historial, barra de vida, bufos, editor o gacha
     if (
       event.target &&
       (event.target.closest('#psm-map-panel') ||
        event.target.closest('#psm-stats-panel') ||
        event.target.closest('#psm-history-modal') ||
        event.target.closest('#psm-custom-hp-bar') ||
+       event.target.closest('#psm-custom-buffs-bar') ||
        event.target.closest('#psm-ui-editor-overlay') ||
        event.target.closest('#scr-gacha'))
     ) {
@@ -6769,10 +7350,7 @@
     }
 
     // No aplicar zoom de FOV si hay menús o pantallas modales abiertas (Pausa, Over, etc.)
-    const pauseEl = document.getElementById('scr-pause');
-    if (pauseEl && isVisible(pauseEl)) return;
-    const overEl = document.getElementById('scr-over');
-    if (overEl && isVisible(overEl)) return;
+    if (isAnyModalOrOverlayOpen()) return;
 
     event.preventDefault();
     const factor = event.deltaY < 0 ? 1.08 : 0.92;
@@ -6801,9 +7379,12 @@
       updateHudVisibility();
     }
 
+    syncHudModalDimming();
+
     if (activeRun) {
       tickEngineClockAndXp();
       updateCustomHpBar();
+      updateCustomBuffsBar();
 
       let bossesCount = 0;
       const NS = gameNS || window.__psmNS;
@@ -6832,11 +7413,16 @@
       detectCompanionFromMenu();
       if (isEditingUI) {
         updateCustomHpBar();
+        updateCustomBuffsBar();
       }
     }
   }, 220);
 
   setInterval(() => {
+    syncHudModalDimming();
+    if (activeRun || isEditingUI) {
+      updateCustomBuffsBar();
+    }
     if (activeRun && !hiddenByUser && !mapCollapsed) {
       drawMap();
     }
@@ -6845,6 +7431,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.1 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida + Bufos Nativos Restaurados) instalado.');
+  console.info('[PS Minimap] v3.9.2 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida y Widget de Bufos) instalado.');
   }
 })();
