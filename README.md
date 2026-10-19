@@ -1,6 +1,7 @@
 # PokéSurvivor HUD Suite & Historial (v3.8.0)
 
 [![Versión](https://img.shields.io/badge/version-3.8.0-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
+[![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-yellow.svg)](manifest.json)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Compatible-brightgreen.svg)](https://www.tampermonkey.net/)
 [![Violentmonkey](https://img.shields.io/badge/Violentmonkey-Compatible-orange.svg)](https://violentmonkey.github.io/)
 [![Licencia](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -9,22 +10,23 @@ Suite completa de herramientas in-game para **[PokéSurvivor](https://pokesurviv
 
 ---
 
-## 🚀 Instalación Rápida en 1 Clic
+## 📦 Instalación
 
-### Paso 1: Instala un gestor de UserScripts
-Si aún no tienes uno instalado en tu navegador, añade una de estas extensiones:
-- [Tampermonkey para Chrome / Brave / Edge](https://www.tampermonkey.net/)
-- [Violentmonkey para Firefox / Chrome](https://violentmonkey.github.io/)
+### 📦 Instalación (Recomendada: Extensión de Chrome / Brave / Edge)
+1. Descarga el repositorio: haz clic en el botón verde **Code** -> **Download ZIP** (o clónalo con git).
+2. Descomprime la carpeta en tu equipo.
+3. Abre tu navegador y accede a:
+   - Chrome / Brave: `chrome://extensions`
+   - Edge: `edge://extensions`
+4. Activa la casilla **Modo de desarrollador** (arriba a la derecha).
+5. Haz clic en el botón **Cargar descomprimida** (Load unpacked).
+6. Selecciona la carpeta descomprimida del proyecto (donde están `manifest.json` y `content.js`).
+7. ¡Listo! Abre https://pokesurvivor.com y la suite se cargará automáticamente.
 
-### Paso 2: Instala el Script
-Haz clic en el siguiente enlace de instalación directa:
-
-[![Instalar en 1 Clic](https://img.shields.io/badge/⚡_INSTALAR_SCRIPT-1--CLIC-success?style=for-the-badge&logo=tampermonkey)](https://raw.githubusercontent.com/ivalactio/pokesurvivor-mod/main/content.js)
-
-> 👉 **Enlace directo al código:**  
-> [https://raw.githubusercontent.com/ivalactio/pokesurvivor-mod/main/content.js](https://raw.githubusercontent.com/ivalactio/pokesurvivor-mod/main/content.js)
-
-Tu gestor de scripts detectará automáticamente la cabecera `==UserScript==` y te mostrará el botón de **Instalar** o **Actualizar**.
+### 🔄 Método Alternativo (Tampermonkey / Violentmonkey)
+Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión completa:
+- Instala [Tampermonkey](https://www.tampermonkey.net/) o [Violentmonkey](https://violentmonkey.github.io/).
+- Haz clic en este enlace directo: [Instalar UserScript (Raw)](https://raw.githubusercontent.com/ivalactio/pokesurvivor-mod/main/content.js) y pulsa "Instalar".
 
 ---
 
@@ -71,22 +73,6 @@ Tu gestor de scripts detectará automáticamente la cabecera `==UserScript==` y 
 | <kbd>Rueda Ratón</kbd> | Ajustar el **FOV / Zoom** de cámara durante la partida |
 | <kbd>Fin</kbd> / <kbd>End</kbd> | Restablecer el zoom de cámara a **1.0×** |
 | <kbd>Esc</kbd> | Cerrar modales abiertos o salir del Editor de UI |
-
----
-
-## 🛠️ Desarrollo e Instalación como Extensión Desempaquetada
-
-Si prefieres usarlo como una extensión de navegador independiente en lugar de UserScript:
-
-1. Clona o descarga este repositorio:
-   ```bash
-   git clone https://github.com/ivalactio/pokesurvivor-mod.git
-   ```
-2. Abre tu navegador y ve a la página de extensiones:
-   - Chrome / Brave / Edge: `chrome://extensions`
-3. Activa el **Modo de desarrollador** (arriba a la derecha).
-4. Haz clic en **Cargar descomprimida** y selecciona la carpeta del proyecto.
-5. Abre [PokéSurvivor](https://pokesurvivor.com/) y disfruta de la experiencia mejorada.
 
 ---
 
