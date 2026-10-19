@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.2)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.3)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.2
+// @version      3.9.3
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida y Bufos, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -2072,32 +2072,62 @@
     }
 
     /* --------------------------------------------------------
-       BARRA DE VIDA Y WIDGET DE BUFOS PERSONALIZABLES
+       PANTALLAS MODALES EN PARTIDA Y TOPBAR DEL JUEGO
        -------------------------------------------------------- */
-    .scr:not(.hidden) {
+    #topbar {
+      z-index: 100 !important;
+      pointer-events: auto !important;
+    }
+
+    #topbar button,
+    #topbar .btn,
+    #topbar [id^="btn-"],
+    #topbar * {
+      pointer-events: auto !important;
+    }
+
+    #scr-pause:not(.hidden),
+    #scr-levelup:not(.hidden),
+    #scr-bond:not(.hidden),
+    #scr-item:not(.hidden),
+    #scr-over:not(.hidden) {
       z-index: 50;
     }
 
+    /* --------------------------------------------------------
+       BARRA DE VIDA Y WIDGET DE BUFOS PERSONALIZABLES
+       -------------------------------------------------------- */
     #psm-custom-hp-bar,
     #psm-custom-buffs-bar {
       position: fixed !important;
       z-index: 15;
       user-select: none;
-      pointer-events: none;
+      pointer-events: none !important;
       box-sizing: border-box;
       transition: box-shadow .2s ease, filter .15s ease;
     }
 
+    #psm-custom-hp-bar:not(.psm-editing-ui) *,
+    #psm-custom-buffs-bar:not(.psm-editing-ui) * {
+      pointer-events: none !important;
+    }
+
+    /* Ocultar en el Menú Principal o cuando no haya run activa */
     #psm-custom-hp-bar:not(.psm-in-run):not(.psm-editing-ui),
-    #psm-custom-buffs-bar:not(.psm-in-run):not(.psm-editing-ui) {
+    #psm-custom-buffs-bar:not(.psm-in-run):not(.psm-editing-ui),
+    #psm-map-panel:not(.psm-in-run),
+    #psm-stats-panel:not(.psm-in-run),
+    #psm-ui-editor-overlay:not(.open) {
       display: none !important;
+      pointer-events: none !important;
     }
 
     #psm-custom-buffs-bar.psm-empty-buffs:not(.psm-editing-ui) {
       display: none !important;
+      pointer-events: none !important;
     }
 
-    /* En Pausa, Subida de Nivel, Vínculo, Objeto o Historial: quedan detrás del backdrop y atenuados */
+    /* En Pausa, Subida de Nivel, Vínculo, Objeto o Historial (durante la run): quedan detrás del backdrop y atenuados */
     #psm-custom-hp-bar.psm-modal-dimmed:not(.psm-editing-ui),
     #psm-custom-buffs-bar.psm-modal-dimmed:not(.psm-editing-ui) {
       z-index: 4 !important;
@@ -4679,20 +4709,78 @@
       element.getClientRects().length > 0;
   }
 
-  function detectGameplay() {
-    const visibleScreens = Array.from(document.querySelectorAll('.scr')).filter(isVisible);
-    if (visibleScreens.some(element => !RUN_OVERLAYS.has(element.id))) {
-      return false;
+  function isMainMenuActive() {
+    // 1. Menú principal (#scr-menu) o pantallas de arranque (#boot, #tap-start)
+    const menuEl = document.getElementById('scr-menu');
+    if (menuEl && !menuEl.classList.contains('hidden')) {
+      const display = menuEl.style.display || window.getComputedStyle(menuEl).display;
+      if (display !== 'none') return true;
     }
+    const bootEl = document.getElementById('boot');
+    if (bootEl && !bootEl.classList.contains('hidden')) {
+      const display = bootEl.style.display || window.getComputedStyle(bootEl).display;
+      if (display !== 'none') return true;
+    }
+    const tapEl = document.getElementById('tap-start');
+    if (tapEl && !tapEl.classList.contains('hidden')) {
+      const display = tapEl.style.display || window.getComputedStyle(tapEl).display;
+      if (display !== 'none') return true;
+    }
+    // 2. Pantallas de lobby o menús fuera de partida
+    for (const id of ['scr-title', 'scr-shop', 'scr-collection', 'scr-evolve', 'scr-news', 'scr-support']) {
+      const el = document.getElementById(id);
+      if (el && isVisible(el)) return true;
+    }
+    // 3. Botones exclusivos del menú superior de lobby (Guardar, Salir)
+    const btnSave = document.getElementById('btn-save');
+    const btnLogout = document.getElementById('btn-logout');
+    if ((btnSave && isVisible(btnSave)) || (btnLogout && isVisible(btnLogout))) {
+      return true;
+    }
+    return false;
+  }
+
+  function detectGameplay() {
+    // Si estamos en el Menú Principal o pantallas de arranque
+    if (isMainMenuActive()) return false;
+
+    // Si el engine de PokéSurvivor está cargado, comprobar su estado interno
+    const NS = gameNS || window.__psmNS || window.__psmodNS || window.__psmGameNS;
+    if (NS && NS.Game) {
+      if (typeof NS.Game.state === 'string') {
+        if (NS.Game.state !== 'playing') return false;
+      }
+      if (NS.Game.player === null && !(NS.Coop && NS.Coop.active && NS.Coop.local)) {
+        return false;
+      }
+    }
+
+    // Comprobación de pantallas .scr visibles
+    const visibleScreens = Array.from(document.querySelectorAll('.scr')).filter(isVisible);
+    if (visibleScreens.length > 0) {
+      if (visibleScreens.some(element => !RUN_OVERLAYS.has(element.id))) {
+        return false;
+      }
+    }
+
     if (isVisible(document.getElementById('boot'))) return false;
     if (isVisible(document.getElementById('tap-start'))) return false;
+
+    const menuEl = document.getElementById('scr-menu');
+    if (menuEl && !menuEl.classList.contains('hidden')) return false;
+
+    const canvas = document.getElementById('game') || document.querySelector('canvas#game');
+    if (!canvas) return false;
+
     return true;
   }
 
   function isAnyModalOrOverlayOpen() {
+    // La atenuación de pausa SOLO debe activarse si activeRun es true
+    if (!activeRun) return false;
     if (isEditingUI) return false;
     if (historyModal && historyModal.classList.contains('open')) return true;
-    for (const id of ['scr-pause', 'scr-levelup', 'scr-bond', 'scr-item', 'scr-over', 'scr-settings']) {
+    for (const id of ['scr-pause', 'scr-levelup', 'scr-bond', 'scr-item', 'scr-over']) {
       const el = document.getElementById(id);
       if (el && isVisible(el)) return true;
     }
@@ -4700,6 +4788,13 @@
   }
 
   function syncHudModalDimming() {
+    if (!activeRun) {
+      if (hpBarEl) hpBarEl.classList.remove('psm-modal-dimmed');
+      if (buffsBarEl) buffsBarEl.classList.remove('psm-modal-dimmed');
+      if (mapPanel) mapPanel.classList.remove('psm-modal-dimmed');
+      if (statsPanel) statsPanel.classList.remove('psm-modal-dimmed');
+      return;
+    }
     const dimmed = isAnyModalOrOverlayOpen();
     if (hpBarEl) hpBarEl.classList.toggle('psm-modal-dimmed', dimmed);
     if (buffsBarEl) buffsBarEl.classList.toggle('psm-modal-dimmed', dimmed);
@@ -4709,6 +4804,7 @@
 
   function updateHudVisibility() {
     const shouldShow = activeRun && !hiddenByUser;
+    document.body.classList.toggle('psm-in-run', Boolean(activeRun));
     mapPanel.classList.toggle('psm-in-run', shouldShow);
     statsPanel.classList.toggle('psm-in-run', shouldShow);
     if (hpBarEl) {
@@ -6319,7 +6415,7 @@
   // y píldoras/fondos oscuros de bufos y estados en X: [-10, 350], Y: [8, 130]),
   // excluyendo siempre la barra de XP de ancho completo (y=0..7) y cualquier elemento del mundo.
   function isNativePlayerHudTarget(ctx, x, y, w = 0, h = 0) {
-    if (!ctx || isWorldTransform(ctx)) return false;
+    if (!activeRun || !ctx || isWorldTransform(ctx)) return false;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const bw = Number.isFinite(w) ? Math.abs(w) : 0;
     const bh = Number.isFinite(h) ? Math.abs(h) : 0;
@@ -7428,9 +7524,10 @@
     }
   }, 80);
 
+  updateHudVisibility();
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.2 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida y Widget de Bufos) instalado.');
+  console.info('[PS Minimap] v3.9.3 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida y Widget de Bufos) instalado.');
   }
 })();
