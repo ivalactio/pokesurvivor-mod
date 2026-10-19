@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.1)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.0
+// @version      3.9.1
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida estilo Brawl Stars, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -5814,13 +5814,39 @@
     recordAllyExploredArea(allyX, allyY);
   }
 
+  function getNativeHudSafeOffsets() {
+    try {
+      const NS = gameNS || window.__psmNS;
+      if (NS && NS.Touch && typeof NS.Touch.safeArea === 'function') {
+        const sa = NS.Touch.safeArea();
+        if (sa) return { left: sa.left || 0, top: sa.top || 0 };
+      }
+    } catch (_) {}
+    return { left: 0, top: 0 };
+  }
+
+  // Detecta exclusivamente la banda de la barra de vida nativa del jugador (nombre y=30, nivel y=46,
+  // cápsula y barra HP x=64..232 y=37..48, texto HP y=46), excluyendo la barra de XP superior (y=0..7)
+  // y excluyendo la fila de bufos temporales / estados (y=54..69, texto y=65) para que conserven su render original.
   function isNativePlayerHudTarget(ctx, x, y, w = 0, h = 0) {
     if (!activeRun || !ctx || isWorldTransform(ctx)) return false;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const bw = Number.isFinite(w) ? Math.abs(w) : 0;
     const bh = Number.isFinite(h) ? Math.abs(h) : 0;
-    if (bw > 300 || bh > 90) return false;
-    return x >= -10 && x <= 290 && y >= -10 && y <= 78 && (x + bw) <= 305 && (y + bh) <= 90;
+    if (bw > 260 || bh > 36) return false;
+    const sa = getNativeHudSafeOffsets();
+    const minX = 8 + sa.left;
+    const maxX = 248 + sa.left;
+    const minY = 22 + sa.top;
+    const maxY = 50 + sa.top;
+    return (
+      x >= minX &&
+      x <= maxX &&
+      y >= minY &&
+      y <= maxY &&
+      (x + bw) <= maxX + 12 &&
+      (y + bh) <= maxY + 2
+    );
   }
 
   const originalDrawImage = gameCtx.drawImage;
@@ -5830,6 +5856,8 @@
   const originalFillText = gameCtx.fillText;
   const originalStrokeText = gameCtx.strokeText;
   const originalBeginPath = gameCtx.beginPath;
+  const originalMoveTo = gameCtx.moveTo;
+  const originalArcTo = gameCtx.arcTo;
   const originalRoundRect = gameCtx.roundRect;
   const originalRect = gameCtx.rect;
   const originalArc = gameCtx.arc;
@@ -5939,6 +5967,31 @@
       gameCtx.beginPath = function() {
         this.__psmSuppressPath = false;
         return originalBeginPath.apply(this, arguments);
+      };
+    }
+
+    if (typeof originalMoveTo === 'function') {
+      gameCtx.moveTo = function(x, y) {
+        try {
+          if (!isWorldTransform(this) && isNativePlayerHudTarget(this, x, y, 0, 0)) {
+            this.__psmSuppressPath = true;
+          }
+        } catch (_) {}
+        return originalMoveTo.apply(this, arguments);
+      };
+    }
+
+    if (typeof originalArcTo === 'function') {
+      gameCtx.arcTo = function(x1, y1, x2, y2, r) {
+        try {
+          if (
+            !isWorldTransform(this) &&
+            (isNativePlayerHudTarget(this, x1, y1, 0, 0) || isNativePlayerHudTarget(this, x2, y2, 0, 0))
+          ) {
+            this.__psmSuppressPath = true;
+          }
+        } catch (_) {}
+        return originalArcTo.apply(this, arguments);
       };
     }
 
@@ -6792,6 +6845,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.0 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida con Temas + Optimización Radar) instalado.');
+  console.info('[PS Minimap] v3.9.1 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida + Bufos Nativos Restaurados) instalado.');
   }
 })();
