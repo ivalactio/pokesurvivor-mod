@@ -1,6 +1,6 @@
-# PokéSurvivor HUD Suite & Historial (v3.9.6)
+# PokéSurvivor HUD Suite & Historial (v3.9.7)
 
-[![Versión](https://img.shields.io/badge/version-3.9.6-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
+[![Versión](https://img.shields.io/badge/version-3.9.7-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
 [![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-yellow.svg)](manifest.json)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Compatible-brightgreen.svg)](https://www.tampermonkey.net/)
 [![Violentmonkey](https://img.shields.io/badge/Violentmonkey-Compatible-orange.svg)](https://violentmonkey.github.io/)
@@ -32,7 +32,7 @@ Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión
 
 ### 💡 ¿Por qué esta suite? Diseñada para no estorbar
 
-- 🔕 **Control total de la interfaz:** Si en algún momento prefieres una experiencia limpia o jugar sin distracciones, pulsas la tecla **`M`** y todo el HUD del mod se oculta al instante (o la tecla **`B`** / **`N`** para plegar solo el mapa o el panel de daño). La barra de vida y bufos permanecen siempre visibles para mayor seguridad.
+- 🔕 **Control total de la interfaz:** Si en algún momento prefieres una experiencia limpia o jugar sin distracciones, pulsas la tecla **`M`** y todo el HUD del mod se oculta al instante (o las teclas **`B`** / **`N`** para ocultar o mostrar por completo solo el mapa o el panel de daño, con un indicador sutil de atajos en la esquina inferior izquierda). La barra de vida y bufos permanecen siempre visibles para mayor seguridad.
 - 🏷️ **Minimapa con filtros:** Muestra solo lo que te interesa en cada momento (aliados, cofres, jefes, objetos...) con un simple clic en la leyenda.
 - 🔍 **FOV dinámico y natural:** Ajusta el campo de visión en plena partida simplemente usando la rueda del ratón, sin menús intermedios.
 - 📜 **Historial compartible:** Tus runs y builds se quedan guardadas automáticamente para que puedas revisarlas o compartir el resumen directamente con tus colegas.
@@ -79,8 +79,8 @@ Si prefieres ejecutarlo como UserScript independiente sin instalar la extensión
 | :--- | :--- |
 | <kbd>H</kbd> | Abrir o cerrar el **Modal de Historial** de partidas |
 | <kbd>M</kbd> | Ocultar o mostrar todo el **HUD integrado** |
-| <kbd>B</kbd> | Plegar o desplegar el panel del **Minimapa** |
-| <kbd>N</kbd> | Plegar o desplegar el panel de **Daño y Stats** |
+| <kbd>B</kbd> | Ocultar o mostrar por completo el panel del **Minimapa** |
+| <kbd>N</kbd> | Ocultar o mostrar por completo el panel de **Daño y Stats** |
 | <kbd>Alt</kbd> + <kbd>J</kbd> | Desplegar u ocultar la sección de **Tus Mejoras y Build** |
 | <kbd>Rueda Ratón</kbd> | Ajustar el **FOV / Zoom** de cámara durante la partida |
 | <kbd>Fin</kbd> / <kbd>End</kbd> | Restablecer el zoom de cámara a **1.0×** |

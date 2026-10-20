@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.6)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.7)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.6
+// @version      3.9.7
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida y Bufos, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -626,6 +626,7 @@
     const HISTORY_KEY = 'psm-run-history-v1';
     const SIZE_KEY = 'psm-panel-size-v1';
     const STARTERS_KEY = 'psm-starter-moves-v1';
+    const PANEL_HIDDEN_SESSION_KEY = 'psm-panel-hidden-session-v1';
     const MAX_HISTORY_RUNS = 40;
     const MIN_MAP_RADIUS = 450;
     const MAX_MAP_RADIUS = 3000; // Limita el zoom out mínimo del minimapa a 0.6× (1800 / 3000)
@@ -636,6 +637,20 @@
     let viewBounds = null;
     let activeRun = false;
     let hiddenByUser = false;
+    let minimapHidden = false;
+    let statsHidden = false;
+    try {
+      const savedHidden = JSON.parse(sessionStorage.getItem(PANEL_HIDDEN_SESSION_KEY) || '{}');
+      if (typeof savedHidden.minimapHidden === 'boolean') minimapHidden = savedHidden.minimapHidden;
+      if (typeof savedHidden.statsHidden === 'boolean') statsHidden = savedHidden.statsHidden;
+    } catch (_) {}
+
+    function savePanelHiddenSession() {
+      try {
+        sessionStorage.setItem(PANEL_HIDDEN_SESSION_KEY, JSON.stringify({ minimapHidden, statsHidden }));
+      } catch (_) {}
+    }
+
     let mapCollapsed = false;
     let statsCollapsed = false;
     let mapHasCustomPosition = false;
@@ -2395,6 +2410,8 @@
     #psm-custom-buffs-bar:not(.psm-in-run):not(.psm-editing-ui),
     #psm-map-panel:not(.psm-in-run),
     #psm-stats-panel:not(.psm-in-run),
+    #psm-map-panel.psm-panel-hidden,
+    #psm-stats-panel.psm-panel-hidden,
     #psm-ui-editor-overlay:not(.open) {
       display: none !important;
       pointer-events: none !important;
@@ -2402,6 +2419,56 @@
 
     #psm-custom-buffs-bar.psm-empty-buffs:not(.psm-editing-ui) {
       display: none !important;
+      pointer-events: none !important;
+    }
+
+    /* Indicador translúcido de atajos abajo a la izquierda (v3.9.7) */
+    #psm-shortcut-hint {
+      position: fixed !important;
+      bottom: 12px;
+      left: 12px;
+      z-index: 895;
+      pointer-events: none !important;
+      user-select: none;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      border: 1px solid rgba(244, 248, 255, 0.22);
+      border-radius: 7px;
+      padding: 4px 9px;
+      color: #f4f8ff;
+      font: 700 11.5px/1.2 var(--psm-font);
+      letter-spacing: 0.02em;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+      opacity: 0.75;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      transition: opacity .15s ease, filter .15s ease;
+    }
+
+    #psm-shortcut-hint.psm-visible {
+      display: inline-flex;
+    }
+
+    #psm-shortcut-hint .psm-hint-key {
+      color: var(--psm-gold);
+      font-weight: 700;
+    }
+
+    #psm-shortcut-hint:not(.psm-in-run),
+    #psm-shortcut-hint.psm-panel-hidden,
+    #psm-shortcut-hint.psm-modal-dimmed {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    #psm-shortcut-hint.psm-pause-dimmed {
+      opacity: 0.2 !important;
+      filter: brightness(0.45) !important;
       pointer-events: none !important;
     }
 
@@ -3131,7 +3198,7 @@
         <span id="psm-passive-zoom" title="Zoom del minimapa">1.0×</span>
         <button id="psm-passive-out" class="psm-ctrl-btn" type="button" title="Alejar minimapa">−</button>
         <button id="psm-passive-in" class="psm-ctrl-btn" type="button" title="Acercar minimapa">+</button>
-        <button id="psm-map-fold" class="psm-ctrl-btn" type="button" title="Plegar / desplegar Minimapa (Tecla B)">▁</button>
+        <button id="psm-map-fold" class="psm-ctrl-btn" type="button" title="Plegar / desplegar Minimapa (B para ocultar)">▁</button>
       </div>
     </div>
 
@@ -3148,7 +3215,7 @@
         </div>
         <div id="psm-passive-legend">${legendHTML}</div>
         <div id="psm-bottom-bar">
-          <div id="psm-passive-help">B: plegar mapa · M: ocultar</div>
+          <div id="psm-passive-help">B: mapa · N: stats · M: ocultar todo</div>
           <div id="psm-size-controls">
             <button id="psm-size-reset" type="button" title="Restablecer tamaño original"></button>
             <span id="psm-resize-grip" title="Arrastra para redimensionar">◢</span>
@@ -3171,7 +3238,7 @@
       <span id="psm-run-clock" class="psm-dmg-clock">0:00</span>
       <span id="psm-dps-live" class="psm-dmg-live-pill" title="DPS en tiempo real">0 DPS</span>
       <button id="psm-mejoras-btn" class="psm-mejoras-btn ${showBuffsPanel ? 'active' : ''}" type="button" title="Desplegar Tus Mejoras y Build (Alt + J)">Mejoras</button>
-      <button id="psm-stats-fold" class="psm-ctrl-btn" type="button" title="Plegar / desplegar panel de daño (Tecla N)">▁</button>
+      <button id="psm-stats-fold" class="psm-ctrl-btn" type="button" title="Plegar / desplegar panel de daño (N para ocultar)">▁</button>
     </div>
 
     <div id="psm-stats-body">
@@ -3238,6 +3305,11 @@
     <div id="psm-buffs-pills-wrap"></div>
   `;
 
+  const shortcutHintEl = document.createElement('div');
+  shortcutHintEl.id = 'psm-shortcut-hint';
+  shortcutHintEl.className = 'psm-panel-hidden';
+  shortcutHintEl.setAttribute('aria-hidden', 'true');
+
   const uiEditorOverlay = document.createElement('div');
   uiEditorOverlay.id = 'psm-ui-editor-overlay';
   uiEditorOverlay.innerHTML = `
@@ -3273,6 +3345,7 @@
   gameContainer.appendChild(statsPanel);
   gameContainer.appendChild(hpBarEl);
   gameContainer.appendChild(buffsBarEl);
+  gameContainer.appendChild(shortcutHintEl);
   gameContainer.appendChild(uiEditorOverlay);
 
   // Evitar que clics o interacciones sobre los paneles se propaguen al canvas del juego
@@ -5105,19 +5178,54 @@
     return true;
   }
 
-  function isAnyModalOrOverlayOpen() {
-    // Ocultar el HUD cuando cualquier modal de selección in-game (¡Vínculo! #scr-bond, Subida de Nivel, Objeto, Pausa, Ajustes, Historial) esté abierto
+  function isFullscreenModalOpen() {
     if (!activeRun) return false;
     if (isEditingUI) return false;
     if (historyModal && historyModal.classList.contains('open')) return true;
-    for (const id of ['scr-bond', 'scr-levelup', 'scr-item', 'scr-pause', 'scr-over', 'scr-settings']) {
+    for (const id of ['scr-bond', 'scr-levelup', 'scr-item', 'scr-over', 'scr-settings']) {
       const el = document.getElementById(id);
       if (el && isVisible(el)) return true;
     }
-    if (Array.from(document.querySelectorAll('.scr')).some(isVisible)) {
+    if (Array.from(document.querySelectorAll('.scr')).some(el => el.id !== 'scr-pause' && isVisible(el))) {
       return true;
     }
     return false;
+  }
+
+  function isPauseMenuOpen() {
+    if (!activeRun || isEditingUI) return false;
+    const pauseEl = document.getElementById('scr-pause');
+    return Boolean(pauseEl && isVisible(pauseEl));
+  }
+
+  function isAnyModalOrOverlayOpen() {
+    // Ocultar el HUD cuando cualquier modal de selección in-game (¡Vínculo! #scr-bond, Subida de Nivel, Objeto, Pausa, Ajustes, Historial) esté abierto
+    return isFullscreenModalOpen() || isPauseMenuOpen();
+  }
+
+  function updateShortcutHint() {
+    if (!shortcutHintEl) return;
+    const showHint = Boolean(activeRun && !hiddenByUser && (minimapHidden || statsHidden));
+    if (!showHint) {
+      shortcutHintEl.classList.remove('psm-in-run', 'psm-visible');
+      shortcutHintEl.classList.add('psm-panel-hidden');
+      return;
+    }
+
+    let html = '';
+    if (minimapHidden && statsHidden) {
+      html = '<span class="psm-hint-key">[B]</span> Mapa · <span class="psm-hint-key">[N]</span> Stats';
+    } else if (minimapHidden) {
+      html = '<span class="psm-hint-key">[B]</span> Mostrar Mapa';
+    } else if (statsHidden) {
+      html = '<span class="psm-hint-key">[N]</span> Mostrar Stats';
+    }
+
+    if (shortcutHintEl.innerHTML !== html) {
+      shortcutHintEl.innerHTML = html;
+    }
+    shortcutHintEl.classList.remove('psm-panel-hidden');
+    shortcutHintEl.classList.add('psm-in-run', 'psm-visible');
   }
 
   function syncHudModalDimming() {
@@ -5126,13 +5234,22 @@
       if (buffsBarEl) buffsBarEl.classList.remove('psm-modal-dimmed');
       if (mapPanel) mapPanel.classList.remove('psm-modal-dimmed');
       if (statsPanel) statsPanel.classList.remove('psm-modal-dimmed');
+      if (shortcutHintEl) {
+        shortcutHintEl.classList.remove('psm-modal-dimmed', 'psm-pause-dimmed');
+      }
       return;
     }
-    const dimmed = isAnyModalOrOverlayOpen();
+    const fullscreenModal = isFullscreenModalOpen();
+    const pauseOpen = isPauseMenuOpen();
+    const dimmed = fullscreenModal || pauseOpen;
     if (hpBarEl) hpBarEl.classList.toggle('psm-modal-dimmed', dimmed);
     if (buffsBarEl) buffsBarEl.classList.toggle('psm-modal-dimmed', dimmed);
     if (mapPanel) mapPanel.classList.toggle('psm-modal-dimmed', dimmed);
     if (statsPanel) statsPanel.classList.toggle('psm-modal-dimmed', dimmed);
+    if (shortcutHintEl) {
+      shortcutHintEl.classList.toggle('psm-modal-dimmed', fullscreenModal);
+      shortcutHintEl.classList.toggle('psm-pause-dimmed', pauseOpen && !fullscreenModal);
+    }
   }
 
   try {
@@ -5153,10 +5270,13 @@
   } catch (_) {}
 
   function updateHudVisibility() {
-    const shouldShow = activeRun && !hiddenByUser;
+    const showMap = Boolean(activeRun && !hiddenByUser && !minimapHidden);
+    const showStats = Boolean(activeRun && !hiddenByUser && !statsHidden);
     document.body.classList.toggle('psm-in-run', Boolean(activeRun));
-    mapPanel.classList.toggle('psm-in-run', shouldShow);
-    statsPanel.classList.toggle('psm-in-run', shouldShow);
+    mapPanel.classList.toggle('psm-in-run', showMap);
+    mapPanel.classList.toggle('psm-panel-hidden', !showMap);
+    statsPanel.classList.toggle('psm-in-run', showStats);
+    statsPanel.classList.toggle('psm-panel-hidden', !showStats);
     if (hpBarEl) {
       const showHp = (activeRun || isEditingUI);
       hpBarEl.classList.toggle('psm-in-run', activeRun);
@@ -5173,10 +5293,31 @@
         updateCustomBuffsBar();
       }
     }
+    updateShortcutHint();
     syncHudModalDimming();
-    if (shouldShow) {
+    if (showMap) {
       clampMapPanelToViewport();
+    }
+    if (showStats) {
       clampStatsPanelToViewport();
+    }
+  }
+
+  function toggleMinimapHidden() {
+    minimapHidden = !minimapHidden;
+    savePanelHiddenSession();
+    updateHudVisibility();
+    if (!minimapHidden && activeRun && !hiddenByUser && !mapCollapsed) {
+      drawMap(true);
+    }
+  }
+
+  function toggleStatsHidden() {
+    statsHidden = !statsHidden;
+    savePanelHiddenSession();
+    updateHudVisibility();
+    if (!statsHidden && activeRun && !hiddenByUser && !statsCollapsed) {
+      renderStatsUI();
     }
   }
 
@@ -8539,7 +8680,7 @@
     mapCtx.restore();
   }
 
-  // Atajos de teclado (B: plegar/desplegar mapa, N: plegar/desplegar daño, Alt+J: mejoras/build, H: modal historial, ESC: cierra modal historial, M: ocultar HUD)
+  // Atajos de teclado (B: ocultar/mostrar mapa, N: ocultar/mostrar daño, Alt+J: mejoras/build, H: modal historial, ESC: cierra modal historial, M: ocultar HUD)
   document.addEventListener('keydown', event => {
     if (event.repeat) return;
 
@@ -8590,9 +8731,9 @@
       hiddenByUser = !hiddenByUser;
       updateHudVisibility();
     } else if (key === 'b') {
-      mapFoldBtn.click();
+      toggleMinimapHidden();
     } else if (key === 'n') {
-      statsFoldBtn.click();
+      toggleStatsHidden();
     } else if (event.key === '[') {
       radiusWorld = Math.min(MAX_MAP_RADIUS, Math.round(radiusWorld * 1.25));
       updateZoomUI();
@@ -8715,7 +8856,7 @@
       statusLeft.textContent = `Zonas: ${chunks.size + allyExploredZones.size} · PDI: ${permanentProps.size} · Jefes: ${bossesCount}`;
       statusRight.textContent = dps > 0 ? `${formatNumber(dps)} DPS` : (maxDpsRecorded > 0 ? `Máx: ${formatNumber(maxDpsRecorded)}` : '');
 
-      if (!hiddenByUser && !statsCollapsed) {
+      if (!hiddenByUser && !statsHidden && !statsCollapsed) {
         renderStatsUI();
       }
     } else {
@@ -8732,7 +8873,7 @@
     if (activeRun || isEditingUI) {
       updateCustomBuffsBar();
     }
-    if (activeRun && !hiddenByUser && !mapCollapsed) {
+    if (activeRun && !hiddenByUser && !minimapHidden && !mapCollapsed) {
       drawMap();
     }
   }, 80);
@@ -8741,6 +8882,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.6 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI + Favoritos Historial + Iconos PDI) instalado.');
+  console.info('[PS Minimap] v3.9.7 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI + Ocultado Total B/N + Hint Atajos) instalado.');
   }
 })();
