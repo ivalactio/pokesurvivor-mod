@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.5)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.6)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.5
+// @version      3.9.6
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida y Bufos, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -697,12 +697,12 @@
     { id: 'ally',     label: 'Aliados',        color: '#5fe08a' },
     { id: 'pokemon',  label: 'Pokémon',        color: '#ff6675' },
     { id: 'object',   label: 'Objetos',        color: '#f4b942' },
-    { id: 'chest',    label: 'Cofres',         color: '#fff0a0' },
-    { id: 'bigchest', label: 'Cofre G.',       color: '#ff62bd' },
-    { id: 'altar',    label: 'Altares',        color: '#bd8aff' },
+    { id: 'chest',    label: 'Cofres',         color: '#ffd23f' },
+    { id: 'bigchest', label: 'Cofre G.',       color: '#ffae33' },
+    { id: 'altar',    label: 'Altares',        color: '#d966ff' },
     { id: 'spring',   label: 'Manantial',      color: '#42e5d2' },
     { id: 'trap',     label: 'Trampas',        color: '#a6ee55' },
-    { id: 'boss',     label: 'Jefes',          color: '#ff9f43', isBoss: true }
+    { id: 'boss',     label: 'Jefes',          color: '#ff5b6e', isBoss: true }
   ];
 
   const visibility = Object.fromEntries(CATEGORIES.map(c => [c.id, true]));
@@ -772,9 +772,21 @@
   }
 
   let runHistory = [];
+
+  // Impide que el límite automático de historial elimine partidas marcadas como favoritas
+  function trimHistoryPreservingFavorites(list, maxLimit = MAX_HISTORY_RUNS) {
+    if (!Array.isArray(list)) return [];
+    if (list.length <= maxLimit) return list;
+    const favorites = list.filter(r => r && r.favorite);
+    const nonFavorites = list.filter(r => r && !r.favorite);
+    const allowedNonFavs = Math.max(0, maxLimit - favorites.length);
+    return [...favorites, ...nonFavorites.slice(0, allowedNonFavs)];
+  }
+
   function saveHistoryToStorage() {
     try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(runHistory.slice(0, MAX_HISTORY_RUNS)));
+      runHistory = trimHistoryPreservingFavorites(runHistory, MAX_HISTORY_RUNS);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(runHistory));
     } catch (_) {}
   }
 
@@ -866,6 +878,7 @@
           ...curr,
           id: curr.id || prev.id,
           runId: curr.runId || prev.runId || `run_${prev.id || Date.now()}`,
+          favorite: Boolean(prev.favorite || curr.favorite),
           date: curr.date || prev.date,
           pokemon: curr.pokemon || prev.pokemon,
           timeStr: keepTimeStr,
@@ -1772,10 +1785,40 @@
       transition: transform .08s, background .12s, border-color .12s;
     }
 
+    .psm-run-card.is-fav {
+      background: linear-gradient(180deg, rgba(255, 210, 63, .12), rgba(0, 0, 0, .28));
+      border-color: rgba(255, 210, 63, .65);
+      box-shadow: inset 0 0 10px rgba(255, 210, 63, .12);
+    }
+
     .psm-run-card:hover {
       background: rgba(255, 255, 255, .08);
       border-color: var(--psm-edge);
       transform: translateX(2px);
+    }
+
+    .psm-run-card.is-fav:hover {
+      border-color: var(--psm-gold);
+    }
+
+    .psm-hist-fav-sep {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--psm-gold);
+      margin: 6px 0 8px;
+      opacity: .92;
+    }
+
+    .psm-hist-fav-sep::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255, 210, 63, .45), transparent);
     }
 
     .psm-run-head {
@@ -1819,6 +1862,31 @@
       align-items: center;
       gap: 4px;
       flex-shrink: 0;
+    }
+
+    .psm-run-fav {
+      color: var(--psm-muted);
+      background: rgba(11, 24, 56, .6);
+      border: 1.5px solid rgba(244, 248, 255, .3);
+      border-radius: 6px;
+      cursor: pointer;
+      font: 700 13px/1 var(--psm-font);
+      padding: 3px 6px;
+      line-height: 1;
+      transition: transform .08s, filter .12s, border-color .12s, color .12s, background .12s;
+    }
+
+    .psm-run-fav:hover {
+      color: var(--psm-gold);
+      border-color: var(--psm-gold);
+      filter: brightness(1.15);
+    }
+
+    .psm-run-fav.active {
+      color: var(--psm-gold);
+      background: rgba(255, 210, 63, .18);
+      border-color: var(--psm-gold);
+      box-shadow: 0 0 8px rgba(255, 210, 63, .35);
     }
 
     .psm-run-share {
@@ -2337,18 +2405,14 @@
       pointer-events: none !important;
     }
 
-    /* En Pausa, Subida de Nivel, Vínculo, Objeto o Historial (durante la run): quedan detrás del backdrop y atenuados */
+    /* En Pausa, Subida de Nivel, Vínculo (Fusión), Objeto o Historial (durante la run): ocultar completamente el HUD */
     #psm-custom-hp-bar.psm-modal-dimmed:not(.psm-editing-ui),
-    #psm-custom-buffs-bar.psm-modal-dimmed:not(.psm-editing-ui) {
-      z-index: 4 !important;
-      filter: brightness(0.45) !important;
-      pointer-events: none !important;
-    }
-
+    #psm-custom-buffs-bar.psm-modal-dimmed:not(.psm-editing-ui),
     #psm-map-panel.psm-modal-dimmed,
     #psm-stats-panel.psm-modal-dimmed {
-      z-index: 4 !important;
-      filter: brightness(0.45) !important;
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
       pointer-events: none !important;
     }
 
@@ -5042,13 +5106,16 @@
   }
 
   function isAnyModalOrOverlayOpen() {
-    // La atenuación de pausa SOLO debe activarse si activeRun es true
+    // Ocultar el HUD cuando cualquier modal de selección in-game (¡Vínculo! #scr-bond, Subida de Nivel, Objeto, Pausa, Ajustes, Historial) esté abierto
     if (!activeRun) return false;
     if (isEditingUI) return false;
     if (historyModal && historyModal.classList.contains('open')) return true;
-    for (const id of ['scr-pause', 'scr-levelup', 'scr-bond', 'scr-item', 'scr-over']) {
+    for (const id of ['scr-bond', 'scr-levelup', 'scr-item', 'scr-pause', 'scr-over', 'scr-settings']) {
       const el = document.getElementById(id);
       if (el && isVisible(el)) return true;
+    }
+    if (Array.from(document.querySelectorAll('.scr')).some(isVisible)) {
+      return true;
     }
     return false;
   }
@@ -5067,6 +5134,23 @@
     if (mapPanel) mapPanel.classList.toggle('psm-modal-dimmed', dimmed);
     if (statsPanel) statsPanel.classList.toggle('psm-modal-dimmed', dimmed);
   }
+
+  try {
+    const modalVisObserver = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        const t = m.target;
+        if (t && t instanceof Element && (t.classList.contains('scr') || RUN_OVERLAYS.has(t.id) || t.id === 'scr-over')) {
+          syncHudModalDimming();
+          break;
+        }
+      }
+    });
+    modalVisObserver.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden']
+    });
+  } catch (_) {}
 
   function updateHudVisibility() {
     const shouldShow = activeRun && !hiddenByUser;
@@ -5759,6 +5843,7 @@
     if (existingIdx !== -1) {
       const prev = runHistory[existingIdx];
       runRecord.id = prev.id || runRecord.id;
+      runRecord.favorite = Boolean(prev.favorite || runRecord.favorite);
       runRecord.level = Math.max(runRecord.level || 1, prev.level || 1);
       runRecord.kills = Math.max(runRecord.kills || 0, prev.kills || 0);
       runRecord.bosses = Math.max(runRecord.bosses || 0, prev.bosses || 0);
@@ -5772,10 +5857,7 @@
       runHistory.unshift(runRecord);
     }
 
-    runHistory = deduplicateRunHistory(runHistory);
-    if (runHistory.length > MAX_HISTORY_RUNS) {
-      runHistory.length = MAX_HISTORY_RUNS;
-    }
+    runHistory = trimHistoryPreservingFavorites(deduplicateRunHistory(runHistory), MAX_HISTORY_RUNS);
     saveHistoryToStorage();
 
     if (historyModal.classList.contains('open')) {
@@ -6842,10 +6924,7 @@
     }
 
     if (newEntries.length > 0 || updatedExisting) {
-      runHistory = [...newEntries, ...runHistory];
-      if (runHistory.length > MAX_HISTORY_RUNS) {
-        runHistory.length = MAX_HISTORY_RUNS;
-      }
+      runHistory = trimHistoryPreservingFavorites([...newEntries, ...runHistory], MAX_HISTORY_RUNS);
       saveHistoryToStorage();
       renderHistoryUI();
     }
@@ -6862,6 +6941,14 @@
     if (importedCount > 0 && elImportText) {
       elImportText.value = '';
     }
+  }
+
+  function getRunNumericDps(run) {
+    if (!run || typeof run !== 'object') return 0;
+    if (typeof run.maxDps === 'number' && Number.isFinite(run.maxDps)) return run.maxDps;
+    if (typeof run.maxDps === 'string') return parseFormattedNumber(run.maxDps);
+    if (typeof run.avgDps === 'number' && Number.isFinite(run.avgDps)) return run.avgDps;
+    return parseFormattedNumber(run.avgDps || 0);
   }
 
   function copyTextToClipboard(text) {
@@ -6895,7 +6982,8 @@
         bestTimeSec = r.timeSec;
         bestTimeStr = r.timeStr;
       }
-      if ((r.maxDps || 0) > bestDps) bestDps = r.maxDps;
+      const rDps = getRunNumericDps(r);
+      if (rDps > bestDps) bestDps = rDps;
       if ((r.kills || 0) > bestKills) bestKills = r.kills;
     }
 
@@ -6910,9 +6998,37 @@
 
     elHistList.innerHTML = '';
 
-    for (const run of runHistory) {
+    // Ordenar: 1º Favoritas de MAYOR a MENOR DPS; 2º Resto en orden cronológico (más reciente a más antigua)
+    const favoriteRuns = runHistory
+      .filter(r => r && r.favorite)
+      .sort((a, b) => getRunNumericDps(b) - getRunNumericDps(a) || (b.timeSec || 0) - (a.timeSec || 0) || (b.id || 0) - (a.id || 0));
+    const regularRuns = runHistory
+      .filter(r => r && !r.favorite)
+      .sort((a, b) => (b.id || 0) - (a.id || 0));
+
+    const orderedList = [...favoriteRuns, ...regularRuns];
+    const hasFavorites = favoriteRuns.length > 0;
+    let regularHeaderRendered = false;
+
+    if (hasFavorites) {
+      const favSep = document.createElement('div');
+      favSep.className = 'psm-hist-fav-sep';
+      favSep.innerHTML = `<span>⭐ Partidas Favoritas (${favoriteRuns.length}) · Mayor DPS</span>`;
+      elHistList.appendChild(favSep);
+    }
+
+    for (const run of orderedList) {
+      if (hasFavorites && !run.favorite && !regularHeaderRendered) {
+        regularHeaderRendered = true;
+        const regSep = document.createElement('div');
+        regSep.className = 'psm-hist-fav-sep';
+        regSep.style.color = 'var(--psm-muted)';
+        regSep.innerHTML = `<span>🕒 Historial Reciente</span>`;
+        elHistList.appendChild(regSep);
+      }
+
       const card = document.createElement('div');
-      card.className = 'psm-run-card';
+      card.className = `psm-run-card${run.favorite ? ' is-fav' : ''}`;
 
       let runMoveTotalDmg = 0;
       for (const m of (run.moves || [])) runMoveTotalDmg += (m.damage || 0);
@@ -6967,13 +7083,16 @@
         : '<div class="psm-empty-msg" style="padding:4px">Sin pasivas registradas</div>';
 
       const totalDmgVal = run.totalDamage ?? run.totalDmg ?? runMoveTotalDmg;
+      const numericDps = getRunNumericDps(run);
+      const isFav = Boolean(run.favorite);
 
       card.innerHTML = `
         <div class="psm-run-head" title="${escapeHtml(run.date)} · Clic para desplegar la build completa">
-          <span class="psm-run-poke">${escapeHtml(run.pokemon)}</span>
+          <span class="psm-run-poke">${isFav ? '⭐ ' : ''}${escapeHtml(run.pokemon)}</span>
           <span class="psm-run-meta">⏱️ ${escapeHtml(run.timeStr)} · Nv.${run.level} · 💀 ${run.kills || 0}</span>
-          <span class="psm-run-dps">🔥 ${formatNumber(run.maxDps || 0)} DPS</span>
+          <span class="psm-run-dps">🔥 ${formatNumber(numericDps)} DPS</span>
           <div class="psm-run-actions">
+            <button class="psm-run-fav${isFav ? ' active' : ''}" type="button" title="${isFav ? 'Quitar de favoritos' : 'Fijar en favoritos (ordenado arriba por mayor DPS)'}">${isFav ? '⭐' : '☆'}</button>
             <button class="psm-run-share" type="button" title="Copiar resumen de la partida al portapapeles">📋 Compartir</button>
             <button class="psm-run-del" type="button" title="Borrar esta run">×</button>
           </div>
@@ -6993,12 +7112,20 @@
       `;
 
       const headRow = card.querySelector('.psm-run-head');
+      const favBtn = card.querySelector('.psm-run-fav');
       const shareBtn = card.querySelector('.psm-run-share');
       const delBtn = card.querySelector('.psm-run-del');
 
       headRow.addEventListener('click', e => {
         if (e.target.closest('.psm-run-actions')) return;
         card.classList.toggle('expanded');
+      });
+
+      favBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        run.favorite = !run.favorite;
+        saveHistoryToStorage();
+        renderHistoryUI();
       });
 
       shareBtn.addEventListener('click', e => {
@@ -7016,7 +7143,7 @@
 
       delBtn.addEventListener('click', e => {
         e.stopPropagation();
-        runHistory = runHistory.filter(r => r.id !== run.id);
+        runHistory = runHistory.filter(r => r !== run && r.id !== run.id);
         saveHistoryToStorage();
         renderHistoryUI();
       });
@@ -7201,6 +7328,34 @@
     return key;
   }
 
+  function getPropTileKey(x, y, propRef = null) {
+    if (propRef && Number.isFinite(propRef.tx) && Number.isFinite(propRef.ty)) {
+      return `${propRef.tx},${propRef.ty}`;
+    }
+    return `${Math.floor(x / 32)},${Math.floor(y / 32)}`;
+  }
+
+  function upsertPermanentPropByTile(x, y, type, propRef = null, maxLimit = 2000) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !type) return null;
+    const tileKey = getPropTileKey(x, y, propRef);
+    const existing = permanentProps.get(tileKey);
+    // Si ya tenemos referencia directa del motor (NS.World), su tipo es autoritativo y no se pisa por el canvas
+    const finalType = (existing && existing.ref && existing.ref.type) ? existing.ref.type : type;
+    permanentProps.set(tileKey, {
+      x: (propRef && Number.isFinite(propRef.x)) ? propRef.x : x,
+      y: (propRef && Number.isFinite(propRef.y)) ? propRef.y : y,
+      type: finalType,
+      frame: frameId,
+      lastSeen: Date.now(),
+      ref: propRef || (existing && existing.ref) || null
+    });
+
+    if (permanentProps.size > maxLimit) {
+      permanentProps.delete(permanentProps.keys().next().value);
+    }
+    return tileKey;
+  }
+
   function classifyCanvasProp(w, h) {
     const dim = `${w}x${h}`;
     if (dim === '16x14') return 'chest';
@@ -7287,7 +7442,7 @@
       if (type === 'object') {
         upsertSpatialMap(rememberedObjects, x, y, type, 22, 1200);
       } else {
-        upsertSpatialMap(permanentProps, x, y, type, 14, 2000);
+        upsertPermanentPropByTile(x, y, type, null, 2000);
       }
     }
   }
@@ -7534,7 +7689,7 @@
             }
           }
           for (const [k, prop] of permanentProps) {
-            if (prop.frame !== frameId && isInsideCurrentView(prop.x, prop.y, -45)) {
+            if (!prop.ref && prop.frame !== frameId && isInsideCurrentView(prop.x, prop.y, -45)) {
               permanentProps.delete(k);
             }
           }
@@ -7905,12 +8060,15 @@
   function drawPropMarker(x, y, type) {
     if (!visibility[type] || !inBounds(x, y, 10)) return;
 
+    // Cofres: Cuadrado amarillo/dorado con borde oscuro
     if (type === 'chest') {
-      drawBorderedSquare(x, y, 3.8, '#c98a3c');
+      drawBorderedSquare(x, y, 3.8, '#ffd23f');
       return;
     }
     if (type === 'bigchest') {
-      drawBorderedSquare(x, y, 5.2, '#ffd23f');
+      drawBorderedSquare(x, y, 5.0, '#ffae33');
+      mapCtx.fillStyle = '#fff5b8';
+      mapCtx.fillRect(x - 1.6, y - 1.6, 3.2, 3.2);
       return;
     }
 
@@ -7918,27 +8076,54 @@
     mapCtx.translate(x, y);
 
     if (type === 'altar') {
-      mapCtx.rotate(Math.PI / 4);
-      mapCtx.fillStyle = '#7fe0ff';
+      // Altares / Santuarios: Estrella de 4 puntas en morado/magenta brillante con borde oscuro
+      const outerR = 5.6;
+      const innerR = 2.1;
+      mapCtx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4;
+        const r = i % 2 === 0 ? outerR : innerR;
+        const px = Math.cos(angle) * r;
+        const py = Math.sin(angle) * r;
+        if (i === 0) mapCtx.moveTo(px, py);
+        else mapCtx.lineTo(px, py);
+      }
+      mapCtx.closePath();
+      mapCtx.fillStyle = '#d966ff';
       mapCtx.strokeStyle = '#0b1838';
-      mapCtx.lineWidth = 1.6;
-      mapCtx.fillRect(-3.3, -3.3, 6.6, 6.6);
-      mapCtx.strokeRect(-3.3, -3.3, 6.6, 6.6);
+      mapCtx.lineWidth = 1.8;
+      mapCtx.stroke();
+      mapCtx.fill();
+
+      mapCtx.fillStyle = '#ffe8ff';
+      mapCtx.beginPath();
+      mapCtx.arc(0, 0, 1.3, 0, Math.PI * 2);
+      mapCtx.fill();
     } else if (type === 'spring') {
+      // Manantiales / Curación: Círculo/gota en color verde agua / azul claro con borde oscuro
       mapCtx.fillStyle = '#0b1838';
-      mapCtx.fillRect(-1.8, -3.8, 3.6, 7.6);
-      mapCtx.fillRect(-3.8, -1.8, 7.6, 3.6);
+      mapCtx.beginPath();
+      mapCtx.arc(0, 0, 4.8, 0, Math.PI * 2);
+      mapCtx.fill();
+
       mapCtx.fillStyle = '#42e5d2';
-      mapCtx.fillRect(-1, -3, 2, 6);
-      mapCtx.fillRect(-3, -1, 6, 2);
+      mapCtx.beginPath();
+      mapCtx.arc(0, 0, 3.5, 0, Math.PI * 2);
+      mapCtx.fill();
+
+      mapCtx.fillStyle = '#c8fff8';
+      mapCtx.beginPath();
+      mapCtx.arc(-1.0, -1.0, 1.2, 0, Math.PI * 2);
+      mapCtx.fill();
     } else if (type === 'trap') {
+      // Trampas: Aspa / X en verde lima con borde oscuro
       mapCtx.rotate(Math.PI / 4);
       mapCtx.fillStyle = '#0b1838';
-      mapCtx.fillRect(-1.6, -3.4, 3.2, 6.8);
-      mapCtx.fillRect(-3.4, -1.6, 6.8, 3.2);
+      mapCtx.fillRect(-1.6, -3.6, 3.2, 7.2);
+      mapCtx.fillRect(-3.6, -1.6, 7.2, 3.2);
       mapCtx.fillStyle = '#a6ee55';
-      mapCtx.fillRect(-0.9, -2.7, 1.8, 5.4);
-      mapCtx.fillRect(-2.7, -0.9, 5.4, 1.8);
+      mapCtx.fillRect(-0.9, -2.8, 1.8, 5.6);
+      mapCtx.fillRect(-2.8, -0.9, 5.6, 1.8);
     }
 
     mapCtx.restore();
@@ -8029,57 +8214,56 @@
     mapCtx.restore();
   }
 
+  const VALID_MINIMAP_PROP_TYPES = new Set(['chest', 'bigchest', 'altar', 'spring', 'trap']);
   let lastEngineWorldScanAt = 0;
+
   function syncEngineWorldMarkers(now) {
-    const NS = gameNS || window.__psmNS;
+    const NS = gameNS || window.__psmodNS || window.__psmGameNS || window.__psmNS;
     if (!NS || !NS.World || !centerWorld) return;
     if (now - lastEngineWorldScanAt < 420) return;
     lastEngineWorldScanAt = now;
 
     const scanR = Math.min(MAX_MAP_RADIUS, Math.max(2000, getEffectiveMapRadius() * 1.1));
+    const syncPropEntity = pr => {
+      if (!pr) return;
+      // En js/world/world.js, cada prop tiene `pr.type` ('chest', 'bigchest', 'altar', 'spring', 'trap', 'tree', 'rock', 'grass')
+      // mientras que `pr.kind` es un índice numérico (0..3) para la variante.
+      const propType = typeof pr.type === 'string'
+        ? pr.type
+        : (typeof pr.kind === 'string' ? pr.kind : '');
+      if (!VALID_MINIMAP_PROP_TYPES.has(propType)) return;
+
+      const tileKey = getPropTileKey(pr.x, pr.y, pr);
+      const isConsumed = propType !== 'spring' && Boolean(
+        pr.used ||
+        pr.opened ||
+        (typeof pr.hp === 'number' && pr.hp <= 0)
+      );
+
+      if (isConsumed) {
+        permanentProps.delete(tileKey);
+      } else {
+        upsertPermanentPropByTile(pr.x, pr.y, propType, pr, 2000);
+      }
+    };
+
     try {
       if (typeof NS.World.propsInCircle === 'function') {
         const props = NS.World.propsInCircle(centerWorld.x, centerWorld.y, scanR) || [];
         for (const pr of props) {
-          if (!pr || (pr.kind !== 'chest' && pr.kind !== 'bigchest')) continue;
-          const cellKey = `${Math.round(pr.x / 14)},${Math.round(pr.y / 14)},${pr.kind}`;
-          if (pr.opened) {
-            permanentProps.delete(cellKey);
-          } else {
-            permanentProps.set(cellKey, {
-              x: pr.x,
-              y: pr.y,
-              type: pr.kind,
-              frame: frameId,
-              lastSeen: now,
-              ref: pr
-            });
-          }
+          syncPropEntity(pr);
         }
       }
       if (typeof NS.World.specialsNear === 'function') {
         const spList = NS.World.specialsNear(centerWorld.x, centerWorld.y, scanR) || [];
         for (const s of spList) {
-          if (!s) continue;
-          const cellKey = `${Math.round(s.x / 14)},${Math.round(s.y / 14)},altar`;
-          if (s.used) {
-            permanentProps.delete(cellKey);
-          } else {
-            permanentProps.set(cellKey, {
-              x: s.x,
-              y: s.y,
-              type: 'altar',
-              frame: frameId,
-              lastSeen: now,
-              ref: s
-            });
-          }
+          syncPropEntity(s);
         }
       }
     } catch (_) {}
 
     for (const [k, prop] of permanentProps.entries()) {
-      if (prop.ref && (prop.ref.opened || prop.ref.used)) {
+      if (prop.ref && prop.type !== 'spring' && (prop.ref.opened || prop.ref.used || (typeof prop.ref.hp === 'number' && prop.ref.hp <= 0))) {
         permanentProps.delete(k);
       }
     }
@@ -8264,7 +8448,7 @@
     }
 
     for (const prop of permanentProps.values()) {
-      if (prop.ref && (prop.ref.opened || prop.ref.used)) continue;
+      if (prop.ref && prop.type !== 'spring' && (prop.ref.opened || prop.ref.used || (typeof prop.ref.hp === 'number' && prop.ref.hp <= 0))) continue;
       if (!isWorldVisible(prop.x, prop.y, 32)) continue;
       const p = worldToMap(prop.x, prop.y);
       if (p) drawPropMarker(p.x, p.y, prop.type);
@@ -8557,6 +8741,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.5 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI + Importador Historial + Sync Motor Nativo) instalado.');
+  console.info('[PS Minimap] v3.9.6 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI + Favoritos Historial + Iconos PDI) instalado.');
   }
 })();
