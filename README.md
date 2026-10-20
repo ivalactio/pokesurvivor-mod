@@ -1,6 +1,6 @@
-# PokéSurvivor HUD Suite & Historial (v3.9.3)
+# PokéSurvivor HUD Suite & Historial (v3.9.4)
 
-[![Versión](https://img.shields.io/badge/version-3.9.3-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
+[![Versión](https://img.shields.io/badge/version-3.9.4-blue.svg)](https://github.com/ivalactio/pokesurvivor-mod)
 [![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-Manifest_V3-yellow.svg)](manifest.json)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Compatible-brightgreen.svg)](https://www.tampermonkey.net/)
 [![Violentmonkey](https://img.shields.io/badge/Violentmonkey-Compatible-orange.svg)](https://violentmonkey.github.io/)

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PokéSurvivor - Minimapa Pro & Stats",
-  "version": "3.9.3",
+  "version": "3.9.4",
   "description": "HUD in-game integrado (Minimapa Pro, Daño/Stats en vivo, Editor UI Barra de Vida y Bufos, Co-op, FOV Zoom), Turbo Gacha e Historial con runs compartibles.",
   "content_scripts": [
     {

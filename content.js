@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.3)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.4)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.3
+// @version      3.9.4
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida y Bufos, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -638,6 +638,10 @@
     let frameId = 0;
     let runStartedAt = 0;
     let runSavedForCurrentSession = false;
+    let currentRunId = '';
+    let hasConfirmedRunReset = true;
+    let maxEngineRunTime = 0;
+    let activeRunPokemon = '';
     let lastRenderedBuildSig = '';
 
     const origSetTimeout = window.setTimeout.bind(window);
@@ -768,6 +772,119 @@
     } catch (_) {}
   }
 
+  // Limpieza automática retroactiva: fusiona y elimina entradas duplicadas de una misma sesión
+  // (ej. guardados disparados en cada subida de nivel o autoguardado con el mismo Pokémon y tiempos/niveles incrementales)
+  function deduplicateRunHistory(list) {
+    if (!Array.isArray(list) || list.length <= 1) return list || [];
+    const chronological = [...list].reverse();
+    const merged = [];
+
+    for (const rawEntry of chronological) {
+      if (!rawEntry || typeof rawEntry !== 'object') continue;
+      const curr = { ...rawEntry };
+      if (merged.length === 0) {
+        merged.push(curr);
+        continue;
+      }
+
+      const prev = merged[merged.length - 1];
+      const sameRunId = Boolean(prev.runId && curr.runId && prev.runId === curr.runId);
+      const prevPoke = (prev.pokemon || '').trim().toLowerCase();
+      const currPoke = (curr.pokemon || '').trim().toLowerCase();
+      const samePoke = Boolean(prevPoke && currPoke && prevPoke === currPoke);
+
+      const prevTime = prev.timeSec || 0;
+      const currTime = curr.timeSec || 0;
+      const prevLv = prev.level || 1;
+      const currLv = curr.level || 1;
+
+      const realElapsedMs = (curr.id && prev.id) ? Math.abs(curr.id - prev.id) : 0;
+      const isIncrementalSession =
+        samePoke &&
+        currTime >= prevTime &&
+        currLv >= prevLv &&
+        (
+          (realElapsedMs > 0 && realElapsedMs < Math.max(currTime * 950, 120000)) ||
+          (curr.date === prev.date && (currTime - prevTime) <= 300)
+        );
+
+      if (sameRunId || isIncrementalSession) {
+        const keepTimeSec = Math.max(currTime, prevTime);
+        const keepTimeStr = currTime >= prevTime ? (curr.timeStr || prev.timeStr) : (prev.timeStr || curr.timeStr);
+
+        let mergedPassives = Array.isArray(curr.passives) && curr.passives.length > 0 ? curr.passives : (prev.passives || []);
+        if (Array.isArray(prev.passives) && prev.passives.length > 0 && Array.isArray(curr.passives) && curr.passives.length > 0) {
+          const pMap = new Map();
+          for (const p of prev.passives) if (p && p.title) pMap.set(p.title.toLowerCase(), { ...p });
+          for (const p of curr.passives) {
+            if (!p || !p.title) continue;
+            const k = p.title.toLowerCase();
+            if (!pMap.has(k) || (p.count || 1) >= (pMap.get(k).count || 1)) {
+              pMap.set(k, { ...p });
+            }
+          }
+          mergedPassives = Array.from(pMap.values());
+        }
+
+        let mergedMoves = Array.isArray(curr.moves) && curr.moves.length > 0 ? curr.moves : (prev.moves || []);
+        if (Array.isArray(prev.moves) && prev.moves.length > 0 && Array.isArray(curr.moves) && curr.moves.length > 0) {
+          const mMap = new Map();
+          for (const m of prev.moves) if (m && m.title) mMap.set(m.title.toLowerCase(), { ...m });
+          for (const m of curr.moves) {
+            if (!m || !m.title) continue;
+            const k = m.title.toLowerCase();
+            const oldM = mMap.get(k);
+            if (!oldM) {
+              mMap.set(k, { ...m });
+            } else {
+              mMap.set(k, {
+                ...oldM,
+                ...m,
+                count: Math.max(oldM.count || 1, m.count || 1),
+                damage: Math.max(oldM.damage || 0, m.damage || 0),
+                bonded: Boolean(oldM.bonded || m.bonded),
+                bondedWith: m.bondedWith || oldM.bondedWith || '',
+                evolvedFrom: m.evolvedFrom || oldM.evolvedFrom || ''
+              });
+            }
+          }
+          mergedMoves = Array.from(mMap.values()).sort((a, b) => (b.damage || 0) - (a.damage || 0) || (b.count || 1) - (a.count || 1));
+        }
+
+        const totalDamage = Math.max(curr.totalDamage || 0, prev.totalDamage || 0);
+        const avgDps = Math.round(totalDamage / Math.max(1, keepTimeSec));
+        const maxDps = Math.max(curr.maxDps || 0, prev.maxDps || 0, avgDps);
+
+        merged[merged.length - 1] = {
+          ...prev,
+          ...curr,
+          id: curr.id || prev.id,
+          runId: curr.runId || prev.runId || `run_${prev.id || Date.now()}`,
+          date: curr.date || prev.date,
+          pokemon: curr.pokemon || prev.pokemon,
+          timeStr: keepTimeStr,
+          timeSec: keepTimeSec,
+          level: Math.max(currLv, prevLv),
+          kills: Math.max(curr.kills || 0, prev.kills || 0),
+          bosses: Math.max(curr.bosses || 0, prev.bosses || 0),
+          coins: Math.max(curr.coins || 0, prev.coins || 0),
+          maxDps,
+          avgDps,
+          maxHit: Math.max(curr.maxHit || 0, prev.maxHit || 0),
+          totalDamage,
+          item: curr.item || prev.item || null,
+          moves: mergedMoves,
+          passives: mergedPassives,
+          players: curr.players || prev.players
+        };
+      } else {
+        merged.push(curr);
+      }
+    }
+
+    return merged.reverse();
+  }
+
   function sanitizeExistingHistory(rawList) {
     if (!Array.isArray(rawList)) return [];
     const cleaned = [];
@@ -820,7 +937,7 @@
 
       cleaned.push(r);
     }
-    return cleaned;
+    return deduplicateRunHistory(cleaned);
   }
 
   try {
@@ -863,7 +980,8 @@
     'scr-pause',
     'scr-levelup',
     'scr-bond',
-    'scr-item'
+    'scr-item',
+    'scr-settings'
   ]);
 
   // ------------------------------------------------------------------
@@ -4656,6 +4774,9 @@
     bondOrderSeq = 1;
     currentLevel = 1;
     runStartedAt = Date.now();
+    currentRunId = `run_${runStartedAt}_${Math.random().toString(36).slice(2, 7)}`;
+    hasConfirmedRunReset = false;
+    maxEngineRunTime = 0;
     runSavedForCurrentSession = false;
     lastRenderedBuildSig = '';
 
@@ -4689,6 +4810,7 @@
     if (engPl && engPl.mon && engPl.mon.name) {
       companionName = engPl.mon.name;
     }
+    activeRunPokemon = companionName || '';
 
     if (companionName) {
       const knownStarters = starterMovesByPoke[companionName.toLowerCase()];
@@ -4726,16 +4848,10 @@
       const display = tapEl.style.display || window.getComputedStyle(tapEl).display;
       if (display !== 'none') return true;
     }
-    // 2. Pantallas de lobby o menús fuera de partida
-    for (const id of ['scr-title', 'scr-shop', 'scr-collection', 'scr-evolve', 'scr-news', 'scr-support']) {
+    // 2. Pantallas de lobby o menús fuera de partida (excluimos #topbar porque permanece en el DOM durante la partida)
+    for (const id of ['scr-title', 'scr-shop', 'scr-gacha', 'scr-collection', 'scr-evolve', 'scr-news', 'scr-support']) {
       const el = document.getElementById(id);
       if (el && isVisible(el)) return true;
-    }
-    // 3. Botones exclusivos del menú superior de lobby (Guardar, Salir)
-    const btnSave = document.getElementById('btn-save');
-    const btnLogout = document.getElementById('btn-logout');
-    if ((btnSave && isVisible(btnSave)) || (btnLogout && isVisible(btnLogout))) {
-      return true;
     }
     return false;
   }
@@ -4744,18 +4860,22 @@
     // Si estamos en el Menú Principal o pantallas de arranque
     if (isMainMenuActive()) return false;
 
-    // Si el engine de PokéSurvivor está cargado, comprobar su estado interno
+    // Si el engine de PokéSurvivor está cargado, comprobar si se encuentra explícitamente en menú o fin de partida
+    // (IMPORTANTE: durante subidas de nivel, pausa, vínculo u objeto, Game.state puede ser 'levelup'/'pause'/etc., lo cual sigue siendo parte de la run activa)
     const NS = gameNS || window.__psmNS || window.__psmodNS || window.__psmGameNS;
     if (NS && NS.Game) {
       if (typeof NS.Game.state === 'string') {
-        if (NS.Game.state !== 'playing') return false;
+        const st = NS.Game.state.toLowerCase();
+        if (st === 'menu' || st === 'title' || st === 'boot' || st === 'over' || st === 'gameover') {
+          return false;
+        }
       }
       if (NS.Game.player === null && !(NS.Coop && NS.Coop.active && NS.Coop.local)) {
         return false;
       }
     }
 
-    // Comprobación de pantallas .scr visibles
+    // Comprobación de pantallas .scr visibles (permitiendo RUN_OVERLAYS: pause, levelup, bond, item, settings)
     const visibleScreens = Array.from(document.querySelectorAll('.scr')).filter(isVisible);
     if (visibleScreens.length > 0) {
       if (visibleScreens.some(element => !RUN_OVERLAYS.has(element.id))) {
@@ -4930,7 +5050,7 @@
   }
 
   function captureAndSaveCurrentRun(fromScreenOver = false) {
-    if (runSavedForCurrentSession) return;
+    if (runSavedForCurrentSession && !fromScreenOver) return;
 
     const engPl = getEngineLocalPlayer();
     const elapsedSec = engineRunTime > 0
@@ -5112,8 +5232,13 @@
     const d = new Date();
     const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 
+    if (!currentRunId) {
+      currentRunId = `run_${runStartedAt || Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    }
+
     const runRecord = {
       id: Date.now(),
+      runId: currentRunId,
       date: dateStr,
       pokemon: companionName || 'Pokémon',
       timeStr,
@@ -5132,7 +5257,25 @@
       players: coopPlayersSnapshot.length > 1 ? coopPlayersSnapshot : undefined
     };
 
-    runHistory.unshift(runRecord);
+    // Upsert por runId para evitar duplicar la entrada si la misma sesión se actualiza
+    const existingIdx = runHistory.findIndex(r => r && r.runId && r.runId === currentRunId);
+    if (existingIdx !== -1) {
+      const prev = runHistory[existingIdx];
+      runRecord.id = prev.id || runRecord.id;
+      runRecord.level = Math.max(runRecord.level || 1, prev.level || 1);
+      runRecord.kills = Math.max(runRecord.kills || 0, prev.kills || 0);
+      runRecord.bosses = Math.max(runRecord.bosses || 0, prev.bosses || 0);
+      runRecord.coins = Math.max(runRecord.coins || 0, prev.coins || 0);
+      runRecord.maxDps = Math.max(runRecord.maxDps || 0, prev.maxDps || 0);
+      runRecord.maxHit = Math.max(runRecord.maxHit || 0, prev.maxHit || 0);
+      runRecord.totalDamage = Math.max(runRecord.totalDamage || 0, prev.totalDamage || 0);
+      if (!runRecord.item && prev.item) runRecord.item = prev.item;
+      runHistory[existingIdx] = runRecord;
+    } else {
+      runHistory.unshift(runRecord);
+    }
+
+    runHistory = deduplicateRunHistory(runHistory);
     if (runHistory.length > MAX_HISTORY_RUNS) {
       runHistory.length = MAX_HISTORY_RUNS;
     }
@@ -5389,6 +5532,7 @@
     const pauseBtn = target.closest('#scr-pause button, #scr-pause .btn');
     if (activeRun && pauseBtn && pauseBtn.id !== 'psm-pause-hist-btn' && pauseBtn.id !== 'psm-pause-edit-ui-btn' && /abandonar|salir|menú|menu/i.test(pauseBtn.textContent || '')) {
       captureAndSaveCurrentRun(false);
+      hasConfirmedRunReset = true;
       return;
     }
 
@@ -7459,17 +7603,31 @@
     ensureNativeGachaToggle();
 
     const overEl = document.getElementById('scr-over');
-    if (overEl && isVisible(overEl) && !runSavedForCurrentSession && runStartedAt > 0) {
-      captureAndSaveCurrentRun(true);
+    const isOverVisible = Boolean(overEl && isVisible(overEl));
+    if (isOverVisible) {
+      if (runStartedAt > 0) {
+        captureAndSaveCurrentRun(true);
+      }
+      hasConfirmedRunReset = true;
+    }
+
+    if (isMainMenuActive()) {
+      hasConfirmedRunReset = true;
     }
 
     const next = detectGameplay();
     if (next !== activeRun) {
       if (!activeRun && next) {
-        startNewRunSession();
+        // Solo resetear el minimapa y la sesión si venimos de forma confirmada del menú principal, fin de partida o abandono
+        if (hasConfirmedRunReset || runStartedAt === 0) {
+          startNewRunSession();
+        }
         if (fovZoom !== 1.0) applyEngineFov();
       } else if (activeRun && !next) {
-        captureAndSaveCurrentRun(Boolean(overEl && isVisible(overEl)));
+        // Solo disparar guardado al finalizar de verdad la partida (#scr-over)
+        if (isOverVisible && runStartedAt > 0) {
+          captureAndSaveCurrentRun(true);
+        }
       }
       activeRun = next;
       updateHudVisibility();
@@ -7479,6 +7637,26 @@
 
     if (activeRun) {
       tickEngineClockAndXp();
+
+      // Detectar reinicio directo de partida (reloj vuelve a < 0:05 tras haber avanzado, o cambia el Pokémon al inicio de una nueva run)
+      const rawGameSec = (gameNS && gameNS.Game && typeof gameNS.Game.time === 'number') ? gameNS.Game.time : engineRunTime;
+      const livePl = getEngineLocalPlayer();
+      const liveMonName = (livePl && livePl.mon && livePl.mon.name) ? livePl.mon.name : '';
+      if (rawGameSec > maxEngineRunTime) {
+        maxEngineRunTime = rawGameSec;
+      } else if (maxEngineRunTime >= 8 && rawGameSec > 0 && rawGameSec < 5) {
+        startNewRunSession();
+        maxEngineRunTime = rawGameSec;
+      }
+      if (liveMonName) {
+        if (!activeRunPokemon) {
+          activeRunPokemon = liveMonName;
+        } else if (rawGameSec < 5 && maxEngineRunTime >= 5 && liveMonName.toLowerCase() !== activeRunPokemon.toLowerCase()) {
+          startNewRunSession();
+          activeRunPokemon = liveMonName;
+        }
+      }
+
       updateCustomHpBar();
       updateCustomBuffsBar();
 
@@ -7528,6 +7706,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.3 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida y Widget de Bufos) instalado.');
+  console.info('[PS Minimap] v3.9.4 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida y Widget de Bufos) instalado.');
   }
 })();
