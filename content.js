@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.4)
+// @name         PokéSurvivor - Minimapa HUD Integrado + Historial Nativo (v3.9.5)
 // @namespace    local.pokesurvivor.minimap.passive
-// @version      3.9.4
+// @version      3.9.5
 // @description  Minimapa HUD abajo a la derecha y Panel de Daño independiente arriba a la izquierda, Editor UI Barra de Vida y Bufos, Colapso de Leyenda, FOV Zoom, Turbo Gacha + Tirar Todo e Historial.
 // @match        https://pokesurvivor.com/*
 // @match        https://www.pokesurvivor.com/*
@@ -178,9 +178,15 @@
   }
 
   function getEngineRunSeconds() {
-    if (gameNS && gameNS.Game && typeof gameNS.Game.time === 'number' && gameNS.Game.time > 0) {
-      engineRunTime = gameNS.Game.time;
-      return engineRunTime;
+    if (gameNS && gameNS.Game) {
+      if (gameNS.Game.st && typeof gameNS.Game.st.time === 'number' && gameNS.Game.st.time > 0) {
+        engineRunTime = gameNS.Game.st.time;
+        return engineRunTime;
+      }
+      if (typeof gameNS.Game.time === 'number' && gameNS.Game.time > 0) {
+        engineRunTime = gameNS.Game.time;
+        return engineRunTime;
+      }
     }
     return engineRunTime > 0 ? engineRunTime : 0;
   }
@@ -1640,6 +1646,13 @@
       text-shadow: 2px 2px 0 var(--psm-shadow);
     }
 
+    .psm-modal-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .psm-modal-import-btn,
     .psm-modal-close {
       padding: 6px 14px;
       border: 2px solid var(--psm-edge);
@@ -1654,13 +1667,92 @@
       transition: transform .06s, filter .12s;
     }
 
+    .psm-modal-import-btn {
+      background: linear-gradient(180deg, #ffe37a, #f0a31e);
+      color: #3a2300;
+      border-color: #fff7d6;
+      text-shadow: 1px 1px 0 rgba(255, 255, 255, .4);
+    }
+
+    .psm-modal-import-btn:hover,
     .psm-modal-close:hover {
       filter: brightness(1.15);
     }
 
+    .psm-modal-import-btn:active,
     .psm-modal-close:active {
       transform: translateY(2px);
       box-shadow: 0 0 0 2px var(--psm-edge-out), 0 1px 0 var(--psm-edge-out);
+    }
+
+    .psm-import-box {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      background: rgba(8, 16, 38, .65);
+      border: 2px solid var(--psm-gold);
+      border-radius: 10px;
+      box-shadow: inset 0 0 12px rgba(0, 0, 0, .45);
+    }
+
+    .psm-import-box.open {
+      display: flex;
+    }
+
+    .psm-import-hint {
+      font-size: 12px;
+      color: var(--psm-muted);
+      line-height: 1.3;
+    }
+
+    .psm-import-textarea {
+      width: 100%;
+      min-height: 112px;
+      max-height: 220px;
+      resize: vertical;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      background: rgba(4, 10, 26, .88);
+      border: 2px solid rgba(244, 248, 255, .35);
+      border-radius: 8px;
+      color: var(--psm-ink);
+      font: 12px/1.35 'Consolas', 'Courier New', monospace;
+      outline: none;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    .psm-import-textarea:focus {
+      border-color: var(--psm-gold);
+      box-shadow: 0 0 0 2px rgba(255, 210, 63, .25);
+    }
+
+    .psm-import-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .psm-import-msg {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--psm-green);
+      min-height: 16px;
+    }
+
+    .psm-import-msg.err {
+      color: var(--psm-red);
+    }
+
+    .psm-import-btns {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
     }
 
     .psm-modal-content {
@@ -3141,9 +3233,29 @@
           <span>📜 HISTORIAL DE PARTIDAS</span>
           <span id="psm-hist-count" style="font-size:13px;color:var(--psm-muted);font-weight:700">0 runs</span>
         </div>
-        <button id="psm-modal-close-btn" class="psm-modal-close" type="button">Cerrar (ESC)</button>
+        <div class="psm-modal-head-actions">
+          <button id="psm-hist-import-btn" class="psm-modal-import-btn" type="button" title="Importar una o varias partidas copiadas con 📋 Compartir">📥 Importar</button>
+          <button id="psm-modal-close-btn" class="psm-modal-close" type="button">Cerrar (ESC)</button>
+        </div>
       </div>
       <div class="psm-modal-content">
+        <div id="psm-hist-import-box" class="psm-import-box">
+          <div class="psm-sec-title" style="margin-bottom:2px">
+            <span>📥 Importar Resumen de Partida(s)</span>
+          </div>
+          <div class="psm-import-hint">
+            Pega aquí el texto generado con el botón <b>📋 Compartir</b> (puedes pegar una o varias partidas seguidas):
+          </div>
+          <textarea id="psm-hist-import-text" class="psm-import-textarea" placeholder="🏆 PokéSurvivor · Resumen de Partida (20/10 12:00)&#10;🐾 Pokémon: Gengar (Nv. 75)&#10;⏱️ Tiempo: 15:20 | 🔥 DPS Máx: 14.5k (Media: 9.2k/s)..."></textarea>
+          <div class="psm-import-actions">
+            <span id="psm-hist-import-msg" class="psm-import-msg"></span>
+            <div class="psm-import-btns">
+              <button id="psm-hist-import-cancel" class="psm-modal-close" type="button" style="padding:4px 10px;font-size:12px">Cancelar</button>
+              <button id="psm-hist-import-confirm" class="psm-modal-import-btn" type="button" style="padding:4px 12px;font-size:12px">✅ Procesar e Importar</button>
+            </div>
+          </div>
+        </div>
+
         <div class="psm-sec-title" style="margin-bottom:6px">
           <span>🏆 Récords Personales</span>
         </div>
@@ -3161,6 +3273,40 @@
     </div>
   `;
   gameContainer.appendChild(historyModal);
+
+  const elImportBox = historyModal.querySelector('#psm-hist-import-box');
+  const elImportText = historyModal.querySelector('#psm-hist-import-text');
+  const elImportMsg = historyModal.querySelector('#psm-hist-import-msg');
+
+  for (const kEvt of ['keydown', 'keyup', 'keypress']) {
+    elImportText.addEventListener(kEvt, e => {
+      if (e.key === 'Escape') return;
+      e.stopPropagation();
+    });
+  }
+
+  historyModal.querySelector('#psm-hist-import-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    const willOpen = !elImportBox.classList.contains('open');
+    elImportBox.classList.toggle('open', willOpen);
+    if (willOpen) {
+      elImportMsg.textContent = '';
+      elImportMsg.classList.remove('err');
+      setTimeout(() => elImportText.focus(), 30);
+    }
+  });
+
+  historyModal.querySelector('#psm-hist-import-cancel').addEventListener('click', e => {
+    e.stopPropagation();
+    elImportBox.classList.remove('open');
+    elImportMsg.textContent = '';
+    elImportMsg.classList.remove('err');
+  });
+
+  historyModal.querySelector('#psm-hist-import-confirm').addEventListener('click', e => {
+    e.stopPropagation();
+    importSharedRunsFromText(elImportText.value || '');
+  });
 
   function openHistoryModal() {
     renderHistoryUI();
@@ -4970,33 +5116,378 @@
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   }
 
-  function getEngineMoveBreakdown() {
+  // Metadatos nativos de las cartas de estadísticas de G.LevelUp.STATS (js/systems/levelup.js)
+  const NATIVE_STAT_CARD_META = {
+    hp:   { title: 'Vigor',       valPerPick: 20,  unit: ' PS',  desc: '+20 PS máximos y los curas' },
+    atk:  { title: 'Potencia',    valPerPick: 10,  unit: '%',    desc: '+10% de daño en todos tus movimientos' },
+    spd:  { title: 'Carrera',     valPerPick: 7,   unit: '%',    desc: '+7% de velocidad de movimiento' },
+    cd:   { title: 'Reflejos',    valPerPick: -8,  unit: '%',    desc: '-8% de tiempo de recarga' },
+    def:  { title: 'Coraza',      valPerPick: 6,   unit: '%',    desc: '+6% de reducción de daño' },
+    rgn:  { title: 'Síntesis',    valPerPick: 0.9, unit: '/s',   desc: '+0,9 PS regenerados por segundo' },
+    mag:  { title: 'Imán',        valPerPick: 30,  unit: '%',    desc: '+30% de alcance para recoger gemas' },
+    xp:   { title: 'Aprendizaje', valPerPick: 12,  unit: '%',    desc: '+12% de experiencia obtenida' },
+    heal: { title: 'Baya Zidra',  valPerPick: 45,  unit: '% PS', desc: 'Recupera al instante el 45% de tus PS' }
+  };
+
+  function parseFormattedNumber(raw) {
+    if (raw === null || raw === undefined) return 0;
+    const s = String(raw).trim().replace(/\s+/g, '');
+    const m = s.match(/^([+-]?\d+(?:[.,]\d+)?)([kKmM])?$/);
+    if (!m) {
+      const fallback = parseFloat(s.replace(',', '.'));
+      return Number.isFinite(fallback) ? fallback : 0;
+    }
+    const base = parseFloat(m[1].replace(',', '.'));
+    if (!Number.isFinite(base)) return 0;
+    const suffix = (m[2] || '').toLowerCase();
+    if (suffix === 'm') return Math.round(base * 1000000);
+    if (suffix === 'k') return Math.round(base * 1000);
+    return Math.round(base);
+  }
+
+  // Sincroniza en tiempo real los ataques, el daño/DPS por ataque, los vínculos, el objeto y las cartas
+  // directamente desde las estructuras nativas del motor (G.Game.player / G.RunUI.pauseSummary) y/o #pause-sum
+  function syncBuildWithNativeEngine() {
+    const NS = gameNS || window.__psmodNS || window.__psmGameNS || window.__psmNS;
     const p = getEngineLocalPlayer();
-    const names = { burn: 'Quemaduras', poison: 'Veneno', other: 'Otros' };
-    const moveMetaById = new Map();
-    if (p && Array.isArray(p.moves)) {
-      for (const m of p.moves) {
-        if (m && m.id) {
-          names[m.id] = m.name || m.id;
-          moveMetaById.set(m.id, m);
+    const runSec = Math.max(1, getEngineRunSeconds());
+
+    if (p) {
+      if (typeof p.level === 'number' && p.level > currentLevel) {
+        currentLevel = p.level;
+      }
+      if (p.mon && p.mon.name) {
+        companionName = (NS && typeof NS.T === 'function') ? NS.T(p.mon.name, 'mon') : p.mon.name;
+      } else if (p.poke && p.poke.name && !companionName) {
+        companionName = p.poke.name;
+      }
+      if (typeof p.dmgDealt === 'number' && p.dmgDealt > totalDamageDealt) {
+        totalDamageDealt = p.dmgDealt;
+      }
+
+      // 1. Objeto equipado (pl.item -> G.Items.BY[pl.item])
+      if (p.item && NS && NS.Items && NS.Items.BY && NS.Items.BY[p.item]) {
+        const itDef = NS.Items.BY[p.item];
+        const itName = (NS && typeof NS.T === 'function') ? NS.T(itDef.name, 'item') : itDef.name;
+        const itDesc = (NS && typeof NS.T === 'function') ? NS.T(itDef.desc || '', 'itemDesc') : (itDef.desc || '');
+        equippedItem = { name: itName, desc: itDesc };
+      }
+
+      // 2. Cartas de mejora (pl.statsTaken -> G.LevelUp.STATS)
+      if (p.statsTaken && typeof p.statsTaken === 'object') {
+        const lvlStats = (NS && NS.LevelUp && Array.isArray(NS.LevelUp.STATS)) ? NS.LevelUp.STATS : [];
+        for (const [statId, rawCnt] of Object.entries(p.statsTaken)) {
+          const cnt = Number(rawCnt) || 0;
+          if (cnt <= 0) continue;
+          const def = lvlStats.find(s => s && s.id === statId);
+          const meta = NATIVE_STAT_CARD_META[statId];
+          const rawTitle = (def && def.name) ? ((NS && typeof NS.T === 'function') ? NS.T(def.name, 'stat') : def.name) : (meta ? meta.title : statId);
+          const cleanTitle = sanitizeMoveTitle(rawTitle) || rawTitle;
+          const key = cleanTitle.toLowerCase();
+          const desc = (def && def.desc) ? ((NS && typeof NS.T === 'function') ? NS.T(def.desc, 'statDesc') : def.desc) : (meta ? meta.desc : '');
+
+          let valPerPick = meta ? meta.valPerPick : null;
+          let unit = meta ? meta.unit : '';
+          if (valPerPick === null && desc) {
+            const numMatch = desc.match(/([+-]?\d+(?:[.,]\d+)?)\s*(%|\/s|s|HP|PS)?/i);
+            if (numMatch) {
+              valPerPick = parseFloat(numMatch[1].replace(',', '.'));
+              unit = numMatch[2] || '';
+            }
+          }
+
+          const hasNumeric = valPerPick !== null && Number.isFinite(valPerPick);
+          const totalVal = hasNumeric ? parseFloat((valPerPick * cnt).toFixed(2)) : 0;
+
+          passiveUpgrades.set(key, {
+            title: cleanTitle,
+            count: cnt,
+            totalVal,
+            hasNumeric,
+            unit,
+            desc
+          });
+        }
+      }
+
+      // 3. Vínculos (pl.slots) y Ataques activos (pl.moves con m.dealt y m.since)
+      if (Array.isArray(p.moves) && p.moves.length > 0) {
+        const bondByMove = new Map();
+        if (Array.isArray(p.slots)) {
+          let bSeq = 1;
+          for (const group of p.slots) {
+            if (Array.isArray(group) && group.length > 1) {
+              const order = bSeq++;
+              for (const gm of group) {
+                if (!gm) continue;
+                const mates = group
+                  .filter(x => x && x !== gm)
+                  .map(x => (NS && typeof NS.T === 'function') ? NS.T(x.name, 'move') : (x.name || x.id))
+                  .filter(Boolean)
+                  .join(' + ');
+                bondByMove.set(gm, { bonded: true, bondedWith: mates, bondOrder: order });
+                if (gm.id) bondByMove.set(gm.id, { bonded: true, bondedWith: mates, bondOrder: order });
+              }
+            }
+          }
+        }
+
+        const currentEngineMoveKeys = new Set();
+        for (let idx = 0; idx < p.moves.length; idx++) {
+          const m = p.moves[idx];
+          if (!m) continue;
+          const rawName = (NS && typeof NS.T === 'function') ? NS.T(m.name, 'move') : (m.name || m.id || '');
+          const mTitle = sanitizeMoveTitle(rawName) || rawName;
+          if (!mTitle) continue;
+
+          const mKey = mTitle.toLowerCase();
+          currentEngineMoveKeys.add(mKey);
+
+          const prev = activeMoves.get(mKey);
+          const bInfo = bondByMove.get(m) || (m.id ? bondByMove.get(m.id) : null);
+          const catLabel = m.cat === 'physical' ? 'Físico' : (m.cat === 'special' ? 'Especial' : 'Mejora');
+          const dealt = Math.max(
+            typeof m.dealt === 'number' ? m.dealt : 0,
+            (m.id && engineMoveDmg.has(m.id)) ? engineMoveDmg.get(m.id) : 0,
+            prev ? (prev.damage || 0) : 0
+          );
+          const secs = Math.max(5, runSec - (typeof m.since === 'number' ? m.since : 0));
+          const moveDps = m.cat ? Math.round(dealt / secs) : 0;
+
+          if (m.id && dealt > (engineMoveDmg.get(m.id) || 0)) {
+            engineMoveDmg.set(m.id, dealt);
+          }
+
+          activeMoves.set(mKey, {
+            id: m.id || (prev && prev.id) || mKey,
+            title: mTitle,
+            typeTag: catLabel,
+            cat: m.cat || null,
+            count: Math.max(m.lvl || 1, prev ? (prev.count || 1) : 1),
+            desc: (m.desc && ((NS && typeof NS.T === 'function') ? NS.T(m.desc, 'moveDesc') : m.desc)) || (prev ? prev.desc : ''),
+            bonded: bInfo ? true : Boolean(prev && prev.bonded),
+            bondedWith: (bInfo && bInfo.bondedWith) || (prev && prev.bondedWith) || '',
+            bondOrder: (bInfo && bInfo.bondOrder) || (prev && prev.bondOrder) || 0,
+            evolvedFrom: (prev && prev.evolvedFrom) || (m.evolved ? 'Evo' : ''),
+            evolved: Boolean(m.evolved || (prev && prev.evolvedFrom)),
+            nonDamaging: !m.cat || isNonDamagingMove(mTitle, ''),
+            damage: dealt,
+            dps: moveDps,
+            since: typeof m.since === 'number' ? m.since : 0,
+            hits: prev ? (prev.hits || 0) : 0
+          });
+        }
+
+        // Limpiar movimientos obsoletos o pre-evolucionados que ya no existen en p.moves
+        for (const existingKey of Array.from(activeMoves.keys())) {
+          if (!currentEngineMoveKeys.has(existingKey)) {
+            activeMoves.delete(existingKey);
+          }
         }
       }
     }
-    const total = [...engineMoveDmg.values()].reduce((a, b) => a + b, 0);
-    if (total <= 0) return [];
-    return [...engineMoveDmg.entries()]
-      .map(([k, v]) => {
-        const meta = moveMetaById.get(k);
-        return {
-          key: k,
-          name: names[k] || k,
-          dmg: Math.round(v),
-          pct: total > 0 ? v / total : 0,
-          lvl: meta ? (meta.lvl || 1) : 1,
-          evolved: !!(meta && meta.evolved)
-        };
-      })
-      .sort((a, b) => b.dmg - a.dmg);
+
+    // Fallback DOM: si el menú de pausa (#scr-pause -> #pause-sum) está visible o renderizado, sincronizar de él
+    const pauseSum = document.getElementById('pause-sum');
+    if (pauseSum && pauseSum.children.length > 0 && (!p || !Array.isArray(p.moves) || p.moves.length === 0)) {
+      const moveCards = pauseSum.querySelectorAll('.pause-move');
+      if (moveCards.length > 0) {
+        let domBondSeq = 1;
+        const seenGroups = new WeakMap();
+        for (const mc of moveCards) {
+          const nameEl = mc.querySelector('.pause-move-head b');
+          const lvlEl = mc.querySelector('.pause-move-lvl');
+          const subSpans = mc.querySelectorAll('.pause-move-sub > span, .pause-move-sub > b');
+          if (!nameEl) continue;
+          const rawText = (nameEl.textContent || '').trim();
+          const isEvo = rawText.startsWith('★');
+          const mTitle = sanitizeMoveTitle(rawText.replace(/^★\s*/, ''));
+          if (!mTitle) continue;
+
+          const mKey = mTitle.toLowerCase();
+          const lvlMatch = (lvlEl ? lvlEl.textContent : '').match(/(\d+)/);
+          const mLv = lvlMatch ? parseInt(lvlMatch[1], 10) : 1;
+          const catLabel = subSpans[0] ? (subSpans[0].textContent || '').trim() : '';
+          const dmgText = subSpans[1] ? (subSpans[1].textContent || '').trim() : '';
+
+          let dmgVal = 0;
+          let dpsVal = 0;
+          if (dmgText && !/sin daño Directo/i.test(dmgText)) {
+            const dMatch = dmgText.match(/([\d.,]+[kKmM]?)\s*daño/i);
+            const sMatch = dmgText.match(/([\d.,]+[kKmM]?)\s*\/s/i);
+            if (dMatch) dmgVal = parseFormattedNumber(dMatch[1]);
+            if (sMatch) dpsVal = parseFormattedNumber(sMatch[1]);
+          }
+
+          const bondGroup = mc.closest('.pause-bond-group');
+          let bonded = false;
+          let bOrder = 0;
+          let bondedWith = '';
+          if (bondGroup) {
+            bonded = true;
+            if (!seenGroups.has(bondGroup)) {
+              seenGroups.set(bondGroup, domBondSeq++);
+            }
+            bOrder = seenGroups.get(bondGroup);
+            const groupNames = Array.from(bondGroup.querySelectorAll('.pause-move-head b'))
+              .map(b => sanitizeMoveTitle((b.textContent || '').replace(/^★\s*/, '')))
+              .filter(n => n && n.toLowerCase() !== mKey);
+            bondedWith = groupNames.join(' + ');
+          }
+
+          const prev = activeMoves.get(mKey);
+          activeMoves.set(mKey, {
+            id: (prev && prev.id) || mKey,
+            title: mTitle,
+            typeTag: catLabel || (prev ? prev.typeTag : ''),
+            cat: /mejora/i.test(catLabel) ? null : (catLabel || 'special'),
+            count: Math.max(mLv, prev ? (prev.count || 1) : 1),
+            desc: prev ? prev.desc : '',
+            bonded,
+            bondedWith: bondedWith || (prev ? prev.bondedWith : ''),
+            bondOrder: bOrder || (prev ? prev.bondOrder : 0),
+            evolvedFrom: (prev && prev.evolvedFrom) || (isEvo ? 'Evo' : ''),
+            evolved: isEvo || Boolean(prev && prev.evolvedFrom),
+            nonDamaging: /mejora/i.test(catLabel) || isNonDamagingMove(mTitle, ''),
+            damage: Math.max(dmgVal, prev ? (prev.damage || 0) : 0),
+            dps: dpsVal || (prev ? (prev.dps || 0) : 0),
+            hits: prev ? (prev.hits || 0) : 0
+          });
+        }
+      }
+
+      const itemBox = pauseSum.querySelector('.pause-item');
+      if (itemBox) {
+        const iNameEl = itemBox.querySelector('.pause-item-name');
+        const iDescEl = itemBox.querySelector('.pause-item-desc');
+        if (iNameEl && iNameEl.textContent.trim()) {
+          equippedItem = {
+            name: iNameEl.textContent.trim(),
+            desc: iDescEl ? iDescEl.textContent.trim() : ''
+          };
+        }
+      }
+
+      const cardEls = pauseSum.querySelectorAll('.pause-card');
+      for (const cEl of cardEls) {
+        const cNameEl = cEl.querySelector('.pause-card-name');
+        const cCntEl = cEl.querySelector('.pause-card-cnt');
+        if (!cNameEl) continue;
+        const cTitle = sanitizeMoveTitle(cNameEl.textContent || '');
+        if (!cTitle) continue;
+        const cntMatch = (cCntEl ? cCntEl.textContent : '').match(/(\d+)/);
+        const cnt = cntMatch ? parseInt(cntMatch[1], 10) : 1;
+        const metaEntry = Object.values(NATIVE_STAT_CARD_META).find(m => m.title.toLowerCase() === cTitle.toLowerCase());
+        const key = cTitle.toLowerCase();
+        passiveUpgrades.set(key, {
+          title: cTitle,
+          count: cnt,
+          totalVal: metaEntry ? parseFloat((metaEntry.valPerPick * cnt).toFixed(2)) : 0,
+          hasNumeric: Boolean(metaEntry),
+          unit: metaEntry ? metaEntry.unit : '',
+          desc: metaEntry ? metaEntry.desc : ''
+        });
+      }
+    }
+  }
+
+  function getEngineMoveBreakdown() {
+    syncBuildWithNativeEngine();
+    const NS = gameNS || window.__psmodNS || window.__psmGameNS || window.__psmNS;
+    const p = getEngineLocalPlayer();
+    const runSec = Math.max(1, getEngineRunSeconds());
+    const entries = [];
+    const seenIds = new Set();
+
+    if (p && Array.isArray(p.moves) && p.moves.length > 0) {
+      const bondByMove = new Map();
+      if (Array.isArray(p.slots)) {
+        for (const group of p.slots) {
+          if (Array.isArray(group) && group.length > 1) {
+            for (const gm of group) {
+              if (!gm) continue;
+              const mates = group
+                .filter(x => x && x !== gm)
+                .map(x => (NS && typeof NS.T === 'function') ? NS.T(x.name, 'move') : (x.name || x.id))
+                .filter(Boolean)
+                .join(' + ');
+              bondByMove.set(gm, mates);
+            }
+          }
+        }
+      }
+
+      for (const m of p.moves) {
+        if (!m) continue;
+        if (m.id) seenIds.add(m.id);
+        const rawName = (NS && typeof NS.T === 'function') ? NS.T(m.name, 'move') : (m.name || m.id || 'Ataque');
+        const cleanName = sanitizeMoveTitle(rawName) || rawName;
+        const dealt = Math.max(
+          typeof m.dealt === 'number' ? m.dealt : 0,
+          (m.id && engineMoveDmg.has(m.id)) ? engineMoveDmg.get(m.id) : 0
+        );
+        const secs = Math.max(5, runSec - (typeof m.since === 'number' ? m.since : 0));
+        const moveDps = m.cat ? Math.round(dealt / secs) : 0;
+        const catLabel = m.cat === 'physical' ? 'Físico' : (m.cat === 'special' ? 'Especial' : 'Mejora');
+        const bondedWith = bondByMove.get(m) || '';
+
+        entries.push({
+          key: m.id || cleanName.toLowerCase(),
+          name: cleanName,
+          dmg: Math.round(dealt),
+          dps: moveDps,
+          cat: catLabel,
+          pct: 0,
+          lvl: m.lvl || 1,
+          evolved: !!m.evolved,
+          bonded: bondByMove.has(m),
+          bondedWith
+        });
+      }
+    }
+
+    // Añadir daño pasivo por estados (Quemaduras / Veneno) u otros movimientos capturados en engineMoveDmg
+    const extraNames = { burn: 'Quemaduras', poison: 'Veneno', other: 'Otros' };
+    for (const [k, v] of engineMoveDmg.entries()) {
+      if (seenIds.has(k) || v <= 0) continue;
+      if (entries.length > 0 && k === 'other') continue;
+      entries.push({
+        key: k,
+        name: extraNames[k] || k,
+        dmg: Math.round(v),
+        dps: Math.round(v / Math.max(5, runSec)),
+        cat: k === 'burn' || k === 'poison' ? 'Estado' : '',
+        pct: 0,
+        lvl: 1,
+        evolved: false,
+        bonded: false,
+        bondedWith: ''
+      });
+    }
+
+    if (entries.length === 0 && activeMoves.size > 0) {
+      for (const mv of activeMoves.values()) {
+        entries.push({
+          key: mv.id || mv.title.toLowerCase(),
+          name: mv.title,
+          dmg: Math.round(mv.damage || 0),
+          dps: Math.round(mv.dps || ((mv.damage || 0) / Math.max(5, runSec))),
+          cat: mv.typeTag || '',
+          pct: 0,
+          lvl: mv.count || 1,
+          evolved: Boolean(mv.evolved || mv.evolvedFrom),
+          bonded: !!mv.bonded,
+          bondedWith: mv.bondedWith || ''
+        });
+      }
+    }
+
+    const total = entries.reduce((acc, item) => acc + (item.dmg || 0), 0);
+    for (const item of entries) {
+      item.pct = total > 0 ? (item.dmg || 0) / total : 0;
+    }
+
+    return entries.sort((a, b) => b.dmg - a.dmg || (b.bonded ? 1 : 0) - (a.bonded ? 1 : 0) || b.lvl - a.lvl);
   }
 
   function getCoopPlayerEntries() {
@@ -5052,23 +5543,25 @@
   function captureAndSaveCurrentRun(fromScreenOver = false) {
     if (runSavedForCurrentSession && !fromScreenOver) return;
 
+    syncBuildWithNativeEngine();
+
     const engPl = getEngineLocalPlayer();
-    const elapsedSec = engineRunTime > 0
-      ? Math.round(engineRunTime)
+    const elapsedSec = getEngineRunSeconds() > 0
+      ? Math.round(getEngineRunSeconds())
       : (runStartedAt ? Math.round((Date.now() - runStartedAt) / 1000) : 0);
     let timeStr = formatSecondsToMMSS(elapsedSec);
     let timeSec = elapsedSec;
     let finalLevel = (engPl && engPl.level) ? Math.max(currentLevel, engPl.level) : currentLevel;
     let kills = (engPl && typeof engPl.kills === 'number') ? engPl.kills : 0;
-    let bosses = 0;
-    let coins = 0;
+    let bosses = (engPl && typeof engPl.bosses === 'number') ? engPl.bosses : 0;
+    let coins = (engPl && typeof engPl.coins === 'number') ? engPl.coins : 0;
 
     if (engPl && engPl.mon && engPl.mon.name) {
-      companionName = engPl.mon.name;
+      companionName = (gameNS && typeof gameNS.T === 'function') ? gameNS.T(engPl.mon.name, 'mon') : engPl.mon.name;
     }
     if (engPl && engPl.item && gameNS && gameNS.Items && gameNS.Items.BY && gameNS.Items.BY[engPl.item]) {
       equippedItem = {
-        name: gameNS.Items.BY[engPl.item].name,
+        name: (gameNS && typeof gameNS.T === 'function') ? gameNS.T(gameNS.Items.BY[engPl.item].name, 'item') : gameNS.Items.BY[engPl.item].name,
         desc: gameNS.Items.BY[engPl.item].desc || ''
       };
     }
@@ -5088,8 +5581,8 @@
       }
       if (mLvl) finalLevel = Math.max(finalLevel, parseInt(mLvl[1], 10));
       if (mKills) kills = Math.max(kills, parseInt(mKills[1], 10));
-      if (mBoss) bosses = parseInt(mBoss[1], 10);
-      if (mCoins) coins = parseInt(mCoins[1], 10);
+      if (mBoss) bosses = Math.max(bosses, parseInt(mBoss[1], 10));
+      if (mCoins) coins = Math.max(coins, parseInt(mCoins[1], 10));
 
       const mMovesSection = rawOver.match(/Movimientos\s*\n+\s*([^\n]+)/i);
       if (mMovesSection) {
@@ -5146,7 +5639,7 @@
 
     runSavedForCurrentSession = true;
 
-    // Si disponemos del desglose exacto del motor (engineMoveDmg), lo priorizamos
+    // Priorizamos el desglose nativo del motor (pl.moves con m.dealt, m.since, pl.slots)
     const engineMoves = getEngineMoveBreakdown();
     let movesSnapshot = [];
 
@@ -5156,9 +5649,11 @@
         return {
           title: em.name,
           count: domMove ? Math.max(domMove.count, em.lvl) : em.lvl,
-          bonded: !!(domMove && domMove.bonded),
-          bondedWith: (domMove && domMove.bondedWith) || '',
+          bonded: Boolean(em.bonded || (domMove && domMove.bonded)),
+          bondedWith: em.bondedWith || (domMove && domMove.bondedWith) || '',
           evolvedFrom: (domMove && domMove.evolvedFrom) || (em.evolved ? 'Evo' : ''),
+          cat: em.cat || (domMove && domMove.typeTag) || '',
+          dps: em.dps || (domMove && domMove.dps) || 0,
           damage: em.dmg
         };
       });
@@ -5199,6 +5694,8 @@
           bonded: !!m.bonded,
           bondedWith: m.bondedWith || '',
           evolvedFrom: m.evolvedFrom || '',
+          cat: m.typeTag || '',
+          dps: m.dps || Math.round((m.damage || 0) / Math.max(5, timeSec)),
           damage: Math.round(m.damage || 0)
         }))
         .sort((a, b) => b.damage - a.damage || (b.bonded ? 1 : 0) - (a.bonded ? 1 : 0) || b.count - a.count);
@@ -5719,24 +6216,60 @@
   };
 
   function buildBuffsHtml() {
-    const NS = gameNS || window.__psmNS;
+    const NS = gameNS || window.__psmodNS || window.__psmGameNS || window.__psmNS;
     const p = getEngineLocalPlayer();
     if (!p) {
-      return '<div class="psm-empty-msg">Inicia combate para inspeccionar multiplicadores detallados.</div>';
+      const pauseSum = document.getElementById('pause-sum');
+      if (pauseSum) {
+        const domStats = pauseSum.querySelectorAll('.pause-stat');
+        if (domStats.length > 0) {
+          const domRows = ['<h4>Tus Estadísticas (ESC)</h4>'];
+          for (const stEl of domStats) {
+            const spans = stEl.querySelectorAll('span');
+            const bEl = stEl.querySelector('b');
+            if (spans[0] && bEl) {
+              domRows.push(`<div class="kv"><span>${escapeHtml(spans[0].textContent || '')}</span><b>${escapeHtml(bEl.textContent || '')}</b></div>`);
+            }
+          }
+          return domRows.join('');
+        }
+      }
+      return '<div class="psm-empty-msg">Inicia combate para inspeccionar estadísticas y multiplicadores.</div>';
     }
 
+    const mon = p.mon || {};
+    const calcTakenFallback = def => Math.max(0.78, Math.min(1.25, Math.pow(75 / Math.max(5, def || 75), 0.35)));
+    const fis = (NS && NS.Stats && typeof NS.Stats.taken === 'function')
+      ? (1 - NS.Stats.taken(mon, 'physical'))
+      : (1 - calcTakenFallback(mon.df));
+    const esp = (NS && NS.Stats && typeof NS.Stats.taken === 'function')
+      ? (1 - NS.Stats.taken(mon, 'special'))
+      : (1 - calcTakenFallback(mon.sd));
+    const guard = v => (v >= 0 ? '-' : '+') + Math.round(Math.abs(v) * 100) + ' %';
+
+    const atkPhys = typeof p.atkFor === 'function'
+      ? p.atkFor({ cat: 'physical' })
+      : ((mon.at ? Math.max(0.7, Math.min(1.45, Math.pow(mon.at / 75, 0.55))) : 1) * (p.atkMul || 1));
+    const atkSpec = typeof p.atkFor === 'function'
+      ? p.atkFor({ cat: 'special' })
+      : ((mon.sa ? Math.max(0.7, Math.min(1.45, Math.pow(mon.sa / 75, 0.55))) : 1) * (p.atkMul || 1));
+
     const stats = [
-      ['Daño', `×${formatDecEs(p.atkMul || 1)}`],
-      ['Recarga', formatPctMultiplier(p.cdMul || 1)],
-      ['Velocidad', formatPctMultiplier(p.spdMul || 1)],
+      ['Vida', `${Math.round(p.hp || 0)} / ${Math.round(p.maxHp || 0)}`],
+      ['Ataque', `×${formatDecEs(atkPhys)}`],
+      ['At. Esp.', `×${formatDecEs(atkSpec)}`],
+      ['Defensa', `${mon.df ?? 75} (${guard(fis)} físico)`],
+      ['Def. Esp.', `${mon.sd ?? 75} (${guard(esp)} especial)`],
+      ['Velocidad', `${Math.round(p.spd || 0)} (${formatPctMultiplier(p.spdMul || 1)})`],
+      [`Crítico (×${formatDecEs(p.critMul || 1.5, 1)})`, `${Math.round((p.critChance || 0) * 100)} %`],
       ['Reducción de daño', `${Math.round((p.reduction || 0) * 100)} %`],
-      ['Regeneración', `${formatDecEs(p.regen || 0, 1)} vida/s`],
-      [`Críticos (×${formatDecEs(p.critMul || 1.5, 1)})`, `${Math.round((p.critChance || 0) * 100)} %`],
+      ['Recarga', (p.cdMul || 1) < 0.995 ? `-${Math.round((1 - p.cdMul) * 100)} %` : '0 %'],
+      ['Regeneración', `${formatDecEs(p.regen || 0, 1)} /s`],
       ['Imán', formatPctMultiplier((p.magnet || 78) / 78)],
       ['Experiencia', formatPctMultiplier(p.xpMul || 1)]
     ];
 
-    const rows = ['<h4>Tus Mejoras</h4>'];
+    const rows = ['<h4>Tus Estadísticas</h4>'];
     for (const [k, v] of stats) {
       rows.push(`<div class="kv"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`);
     }
@@ -5764,7 +6297,8 @@
 
     if (p.item && NS && NS.Items && NS.Items.BY && NS.Items.BY[p.item]) {
       const it = NS.Items.BY[p.item];
-      rows.push(`<div class="kv"><span>🎒 ${escapeHtml(it.name)}</span><b>${escapeHtml(it.rarity || '')}</b></div>`);
+      const itName = (NS && typeof NS.T === 'function') ? NS.T(it.name, 'item') : it.name;
+      rows.push(`<div class="kv"><span>🎒 ${escapeHtml(itName)}</span><b>${escapeHtml(it.rarity || 'Objeto')}</b></div>`);
     }
 
     const coopActive = Boolean(NS && NS.Coop && NS.Coop.active);
@@ -5817,10 +6351,12 @@
       if (e.me && showOwnMovesInRow && engineMoves.length > 0) {
         const mvItems = engineMoves.slice(0, 6).map(m => {
           const mPct = Math.round((m.pct || 0) * 100);
+          const prefix = m.bonded ? '🔗 ' : (m.evolved ? '★ ' : '');
+          const dpsInfo = m.dps > 0 ? `${formatNumber(m.dmg)} (${formatNumber(m.dps)}/s)` : formatNumber(m.dmg);
           return `
             <div class="psm-pl-mv">
-              <span>${m.evolved ? '★ ' : ''}${escapeHtml(m.name)}</span>
-              <span>${formatNumber(m.dmg)}</span>
+              <span>${prefix}${escapeHtml(m.name)} <small style="opacity:.75">Nv.${m.lvl || 1}</small></span>
+              <span>${dpsInfo}</span>
               <span>${mPct}%</span>
             </div>
           `;
@@ -5850,6 +6386,7 @@
 
   function renderStatsUI() {
     tickEngineClockAndXp();
+    syncBuildWithNativeEngine();
     const dps = getCurrentDPS();
     const p = getEngineLocalPlayer();
     if (p && p.level && p.level > currentLevel) {
@@ -5894,7 +6431,7 @@
       .map(u => `${u.title}:${u.count}:${u.totalVal}:${u.unit}`)
       .join('|');
     const movesSig = validMoves
-      .map(m => `${m.title}:${m.count}:${m.bonded}:${m.bondOrder}:${m.bondedWith || ''}:${m.evolvedFrom || ''}`)
+      .map(m => `${m.title}:${m.count}:${m.bonded}:${m.bondOrder}:${m.bondedWith || ''}:${m.evolvedFrom || ''}:${formatNumber(m.damage || 0)}:${formatNumber(m.dps || 0)}`)
       .join('|');
     const itemSig = equippedItem ? `${equippedItem.name}:${equippedItem.desc}` : '';
     const buildSig = `${passivesSig}#${movesSig}#${itemSig}`;
@@ -5945,13 +6482,16 @@
         elMovesList.appendChild(itemRow);
       }
 
+      let totalMoveDmg = 0;
+      for (const mv of validMoves) totalMoveDmg += (mv.damage || 0);
+
       const sortedMoves = validMoves.sort((a, b) => {
         if (a.bonded && !b.bonded) return -1;
         if (!a.bonded && b.bonded) return 1;
-        if (a.bonded && b.bonded) {
+        if (a.bonded && b.bonded && (a.bondOrder || 999) !== (b.bondOrder || 999)) {
           return (a.bondOrder || 999) - (b.bondOrder || 999);
         }
-        return b.count - a.count;
+        return (b.damage || 0) - (a.damage || 0) || b.count - a.count;
       });
 
       for (const mv of sortedMoves) {
@@ -5964,9 +6504,15 @@
 
         const prefix = mv.bonded ? '🔗 ' : (mv.evolvedFrom ? '★ ' : '');
         const tagText = mv.bonded ? 'Vínculo' : (mv.typeTag || (mv.evolvedFrom ? 'Evo' : ''));
+        const pct = totalMoveDmg > 0 ? Math.round(((mv.damage || 0) / totalMoveDmg) * 100) : 0;
+        const dmgBadge = (mv.damage || 0) > 0
+          ? `<span class="psm-upg-dmg">${formatNumber(mv.damage)}${mv.dps > 0 ? ` · ${formatNumber(mv.dps)}/s` : ''}</span>`
+          : '';
 
         row.innerHTML = `
+          ${pct > 0 ? `<div class="psm-dmg-bar" style="width:${pct}%"></div>` : ''}
           <span class="psm-upg-name">${prefix}${escapeHtml(mv.title)}</span>
+          ${dmgBadge}
           ${tagText ? `<span class="psm-upg-type">${escapeHtml(tagText)}</span>` : ''}
           <span class="psm-upg-count">Nv.${mv.count}</span>
         `;
@@ -5977,10 +6523,11 @@
 
   function formatRunShareText(run) {
     const lines = [];
+    const totalDmgVal = run.totalDamage ?? run.totalDmg ?? 0;
     lines.push(`🏆 PokéSurvivor · Resumen de Partida (${run.date || ''})`);
     lines.push(`🐾 Pokémon: ${run.pokemon || 'Desconocido'} (Nv. ${run.level || 1})`);
     lines.push(`⏱️ Tiempo: ${run.timeStr || '00:00'} | 🔥 DPS Máx: ${formatNumber(run.maxDps || 0)} (Media: ${formatNumber(run.avgDps || 0)}/s)`);
-    lines.push(`💥 Daño Total: ${formatNumber(run.totalDmg || 0)} | Golpe Máx: ${formatNumber(run.maxHit || 0)}`);
+    lines.push(`💥 Daño Total: ${formatNumber(totalDmgVal)} | Golpe Máx: ${formatNumber(run.maxHit || 0)}`);
     lines.push(`💀 Derrotados: ${run.kills || 0} | 👑 Jefes: ${run.bosses || 0}`);
 
     if (run.item) {
@@ -5994,7 +6541,8 @@
       lines.push(`👥 Equipo Co-op:`);
       for (const pl of run.players) {
         const pct = Math.round(((pl.dmg || 0) / sumP) * 100);
-        lines.push(`  • ${pl.nick}: ${formatNumber(pl.dmg || 0)} (${pct}%)`);
+        const pName = pl.name || pl.nick || 'Aliado';
+        lines.push(`  • ${pName}: ${formatNumber(pl.dmg || 0)} (${pct}%)`);
       }
     }
 
@@ -6016,6 +6564,304 @@
     }
 
     return lines.join('\n');
+  }
+
+  // Huella única por partida (Pokémon + Tiempo + Nivel + Kills + DPS formateado) para el sistema Anti-Duplicados
+  function getRunFingerprint(run) {
+    if (!run || typeof run !== 'object') return '';
+    const pokeKey = String(run.pokemon || 'desconocido').trim().toLowerCase();
+    const timeSecVal = run.timeSec || parseTimeToSeconds(run.timeStr || '0:00');
+    const timeKey = formatSecondsToMMSS(timeSecVal);
+    const lvlKey = Number(run.level || 1);
+    const killsKey = Number(run.kills || 0);
+    const dpsKey = formatNumber(Number(run.maxDps || 0)).toLowerCase();
+    return `${pokeKey}|${timeKey}|${lvlKey}|${killsKey}|${dpsKey}`;
+  }
+
+  // Parser de bloques de texto con el formato exacto de "📋 Compartir" (soporta pegar 1 o múltiples partidas)
+  function parseSharedRunsText(rawText) {
+    if (!rawText || typeof rawText !== 'string') return [];
+    const normalized = rawText.replace(/\r\n/g, '\n').trim();
+    if (!normalized) return [];
+
+    // Separar múltiples bloques si el usuario pega varias partidas seguidas
+    const lines = normalized.split('\n');
+    const blocks = [];
+    let currentBlock = [];
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const isHeader = /^(?:🏆\s*)?Pok[eé]Survivor\s*[·-]\s*Resumen de Partida/i.test(line);
+      const isPokeLine = /^(?:🐾\s*)?Pok[eé]mon\s*:/i.test(line);
+
+      if (isHeader && currentBlock.length > 0) {
+        blocks.push(currentBlock);
+        currentBlock = [line];
+      } else if (isPokeLine && currentBlock.some(l => /^(?:🐾\s*)?Pok[eé]mon\s*:/i.test(l))) {
+        blocks.push(currentBlock);
+        currentBlock = [line];
+      } else {
+        currentBlock.push(line);
+      }
+    }
+    if (currentBlock.length > 0) blocks.push(currentBlock);
+
+    const parsedRuns = [];
+    const now = new Date();
+    const defaultDate = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+      const bLines = blocks[bIdx];
+      let date = defaultDate;
+      let pokemon = '';
+      let level = 1;
+      let timeStr = '';
+      let timeSec = 0;
+      let maxDps = 0;
+      let avgDps = 0;
+      let totalDamage = 0;
+      let maxHit = 0;
+      let kills = 0;
+      let bosses = 0;
+      let item = null;
+      const players = [];
+      const moves = [];
+      const passives = [];
+      let section = '';
+
+      for (const line of bLines) {
+        const mHeader = line.match(/Resumen de Partida\s*(?:\(([^)]+)\))?/i);
+        if (mHeader) {
+          if (mHeader[1] && mHeader[1].trim()) date = mHeader[1].trim();
+          continue;
+        }
+
+        const mPoke = line.match(/Pok[eé]mon\s*:\s*(.+?)(?:\s*\(\s*Nv\.?\s*(\d+)\s*\))?$/i);
+        if (mPoke && !line.startsWith('•')) {
+          pokemon = mPoke[1].trim();
+          if (mPoke[2]) level = parseInt(mPoke[2], 10) || 1;
+          continue;
+        }
+
+        const mTimeDps = line.match(/Tiempo\s*:\s*(\d+:\d+)\s*\|\s*(?:🔥\s*)?DPS\s*M[áa]x\s*:\s*([\d.,]+[kKmM]?)(?:\s*\(\s*Media\s*:\s*([\d.,]+[kKmM]?)\s*\/s\s*\))?/i);
+        if (mTimeDps) {
+          timeStr = mTimeDps[1].trim();
+          timeSec = parseTimeToSeconds(timeStr);
+          maxDps = parseFormattedNumber(mTimeDps[2]);
+          if (mTimeDps[3]) avgDps = parseFormattedNumber(mTimeDps[3]);
+          continue;
+        }
+
+        const mDmg = line.match(/Da[ñn]o\s*Total\s*:\s*([\d.,]+[kKmM]?)\s*\|\s*Golpe\s*M[áa]x\s*:\s*([\d.,]+[kKmM]?)/i);
+        if (mDmg) {
+          totalDamage = parseFormattedNumber(mDmg[1]);
+          maxHit = parseFormattedNumber(mDmg[2]);
+          continue;
+        }
+
+        const mKills = line.match(/Derrotados\s*:\s*(\d+)(?:\s*\|\s*(?:👑\s*)?Jefes\s*:\s*(\d+))?/i);
+        if (mKills) {
+          kills = parseInt(mKills[1], 10) || 0;
+          if (mKills[2]) bosses = parseInt(mKills[2], 10) || 0;
+          continue;
+        }
+
+        const mItem = line.match(/^(?:🎒\s*)?Objeto\s*:\s*(.+)$/i);
+        if (mItem) {
+          item = mItem[1].trim();
+          continue;
+        }
+
+        if (/^(?:👥\s*)?Equipo Co-op\s*:/i.test(line)) {
+          section = 'coop';
+          continue;
+        }
+
+        if (/^(?:⚔️\s*)?Habilidades\s*:/i.test(line)) {
+          section = 'moves';
+          continue;
+        }
+
+        const mPassives = line.match(/^(?:✨\s*)?Pasivas\s*:\s*(.+)$/i);
+        if (mPassives) {
+          section = '';
+          const rawPassives = mPassives[1].split(/,\s*(?=[A-Za-zÁÉÍÓÚÜáéíóúüÑñ])/);
+          for (const token of rawPassives) {
+            const t = token.trim();
+            if (!t) continue;
+            const pm = t.match(/^(.+?)\s*\(\s*x(\d+)\s*\)$/i);
+            if (pm) {
+              const head = pm[1].trim();
+              const count = parseInt(pm[2], 10) || 1;
+              const valMatch = head.match(/^(.+?)\s+([+-]?\d+(?:[.,]\d+)?\s*(?:%|\/s|s|PS|HP)?)$/i);
+              if (valMatch) {
+                passives.push({
+                  title: sanitizeMoveTitle(valMatch[1]) || valMatch[1].trim(),
+                  valStr: valMatch[2].trim(),
+                  count
+                });
+              } else {
+                passives.push({
+                  title: sanitizeMoveTitle(head) || head,
+                  valStr: '',
+                  count
+                });
+              }
+            } else {
+              passives.push({ title: sanitizeMoveTitle(t) || t, valStr: '', count: 1 });
+            }
+          }
+          continue;
+        }
+
+        if (section === 'coop') {
+          const mPl = line.match(/^[•*-]\s*(.+?)\s*:\s*([\d.,]+[kKmM]?)(?:\s*\(\d+%\))?$/);
+          if (mPl) {
+            const pName = mPl[1].trim();
+            players.push({
+              name: pName,
+              nick: pName,
+              dmg: parseFormattedNumber(mPl[2]),
+              me: players.length === 0,
+              exact: true,
+              color: players.length === 0 ? '#ffd23f' : '#5fc8ff'
+            });
+            continue;
+          }
+        }
+
+        if (section === 'moves' || /^(?:🔗|★|[•*-])\s+.+\(\s*Nv\.?\s*\d+\s*\)/i.test(line)) {
+          const mMv = line.match(/^(🔗|★|[•*-])\s*(.+?)\s*\(\s*Nv\.?\s*(\d+)\s*\)(?:\s*[—–-]\s*([\d.,]+[kKmM]?))?/i);
+          if (mMv) {
+            const prefix = mMv[1];
+            const mTitle = sanitizeMoveTitle(mMv[2]) || mMv[2].trim();
+            const mCount = parseInt(mMv[3], 10) || 1;
+            const mDmg = mMv[4] ? parseFormattedNumber(mMv[4]) : 0;
+            moves.push({
+              title: mTitle,
+              count: mCount,
+              bonded: prefix === '🔗',
+              bondedWith: '',
+              evolvedFrom: prefix === '★' ? 'Evo' : '',
+              dps: (timeSec > 0 && mDmg > 0) ? Math.round(mDmg / Math.max(5, timeSec)) : 0,
+              damage: mDmg
+            });
+            continue;
+          }
+        }
+      }
+
+      if (!pokemon && !timeStr) continue;
+
+      const sumMovesDmg = moves.reduce((acc, m) => acc + (m.damage || 0), 0);
+      if (totalDamage <= 0 && sumMovesDmg > 0) {
+        totalDamage = sumMovesDmg;
+      }
+      if (avgDps <= 0 && totalDamage > 0 && timeSec > 0) {
+        avgDps = Math.round(totalDamage / Math.max(1, timeSec));
+      }
+      if (maxDps <= 0 && avgDps > 0) {
+        maxDps = avgDps;
+      }
+
+      parsedRuns.push({
+        id: Date.now() + bIdx,
+        runId: `imported_${Date.now()}_${bIdx}_${Math.random().toString(36).slice(2, 6)}`,
+        date,
+        pokemon: pokemon || 'Pokémon',
+        timeStr: timeStr || formatSecondsToMMSS(timeSec),
+        timeSec,
+        level,
+        kills,
+        bosses,
+        coins: 0,
+        maxDps,
+        avgDps,
+        maxHit,
+        totalDamage,
+        item,
+        moves,
+        passives,
+        players: players.length > 1 ? players : undefined
+      });
+    }
+
+    return parsedRuns;
+  }
+
+  function importSharedRunsFromText(rawText) {
+    if (!elImportMsg) return;
+    const parsed = parseSharedRunsText(rawText);
+    if (parsed.length === 0) {
+      elImportMsg.textContent = '⚠️ No se detectó ninguna partida con el formato de 📋 Compartir.';
+      elImportMsg.classList.add('err');
+      return;
+    }
+
+    const existingByFp = new Map();
+    for (let i = 0; i < runHistory.length; i++) {
+      const fp = getRunFingerprint(runHistory[i]);
+      if (fp) existingByFp.set(fp, i);
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    let updatedExisting = false;
+    const newEntries = [];
+
+    for (const candidate of parsed) {
+      const fp = getRunFingerprint(candidate);
+      if (fp && existingByFp.has(fp)) {
+        const idx = existingByFp.get(fp);
+        if (idx >= 0 && runHistory[idx]) {
+          const target = runHistory[idx];
+          if (!target.totalDamage && candidate.totalDamage > 0) {
+            target.totalDamage = candidate.totalDamage;
+            updatedExisting = true;
+          }
+          if ((!target.moves || target.moves.length === 0) && candidate.moves && candidate.moves.length > 0) {
+            target.moves = candidate.moves;
+            updatedExisting = true;
+          }
+          if ((!target.passives || target.passives.length === 0) && candidate.passives && candidate.passives.length > 0) {
+            target.passives = candidate.passives;
+            updatedExisting = true;
+          }
+          if (!target.item && candidate.item) {
+            target.item = candidate.item;
+            updatedExisting = true;
+          }
+        }
+        skippedCount++;
+      } else {
+        newEntries.push(candidate);
+        if (fp) existingByFp.set(fp, -1);
+        importedCount++;
+      }
+    }
+
+    if (newEntries.length > 0 || updatedExisting) {
+      runHistory = [...newEntries, ...runHistory];
+      if (runHistory.length > MAX_HISTORY_RUNS) {
+        runHistory.length = MAX_HISTORY_RUNS;
+      }
+      saveHistoryToStorage();
+      renderHistoryUI();
+    }
+
+    elImportMsg.classList.remove('err');
+    if (importedCount > 0 && skippedCount > 0) {
+      elImportMsg.textContent = `✅ ${importedCount} importada${importedCount === 1 ? '' : 's'} · ${skippedCount} omitida${skippedCount === 1 ? '' : 's'} por duplicada${skippedCount === 1 ? '' : 's'}.`;
+    } else if (importedCount > 0) {
+      elImportMsg.textContent = `✅ ¡${importedCount} ${importedCount === 1 ? 'partida importada' : 'partidas importadas'} con éxito!`;
+    } else {
+      elImportMsg.textContent = `ℹ️ ${skippedCount === 1 ? 'La partida ya existe' : `Las ${skippedCount} partidas ya existen`} en tu historial (omitida${skippedCount === 1 ? '' : 's'}).`;
+    }
+
+    if (importedCount > 0 && elImportText) {
+      elImportText.value = '';
+    }
   }
 
   function copyTextToClipboard(text) {
@@ -6058,7 +6904,7 @@
     elRecKills.textContent = formatNumber(bestKills);
 
     if (runHistory.length === 0) {
-      elHistList.innerHTML = '<div class="psm-empty-msg">Tus partidas se guardarán aquí automáticamente al terminar o abandonar una run.</div>';
+      elHistList.innerHTML = '<div class="psm-empty-msg">Tus partidas se guardarán aquí automáticamente al terminar o abandonar una run (o usa 📥 Importar).</div>';
       return;
     }
 
@@ -6082,10 +6928,11 @@
         sumP = Math.max(1, sumP);
         coopPlayersHTML = `<div class="psm-hist-sub">Jugadores (Co-op)</div>` + run.players.map(pl => {
           const pct = Math.round(((pl.dmg || 0) / sumP) * 100);
+          const pName = pl.name || pl.nick || 'Aliado';
           return `
             <div class="psm-upg-row" style="margin-bottom:3px">
               <div class="psm-dmg-bar" style="width:${pct}%"></div>
-              <span class="psm-upg-name"><i class="psm-player-dot" style="background:${escapeHtml(pl.color || '#ffd23f')};display:inline-block;margin-right:5px"></i>${escapeHtml(pl.nick)}</span>
+              <span class="psm-upg-name"><i class="psm-player-dot" style="background:${escapeHtml(pl.color || '#ffd23f')};display:inline-block;margin-right:5px"></i>${escapeHtml(pName)}</span>
               <span class="psm-upg-dmg">${formatNumber(pl.dmg || 0)} (${pct}%)</span>
             </div>
           `;
@@ -6096,7 +6943,8 @@
         ? run.moves.map(m => {
             const pct = runMoveTotalDmg > 0 ? Math.round(((m.damage || 0) / runMoveTotalDmg) * 100) : 0;
             const prefix = m.bonded ? '🔗 ' : (m.evolvedFrom ? '★ ' : '');
-            const dmgText = m.damage > 0 ? `<span class="psm-upg-dmg">${formatNumber(m.damage)} (${pct}%)</span>` : '';
+            const dpsPart = m.dps > 0 ? ` · ${formatNumber(m.dps)}/s` : '';
+            const dmgText = m.damage > 0 ? `<span class="psm-upg-dmg">${formatNumber(m.damage)}${dpsPart} (${pct}%)</span>` : '';
             return `
               <div class="psm-upg-row ${m.bonded ? 'psm-row-bonded' : ''}" style="margin-bottom:3px">
                 <div class="psm-dmg-bar" style="width:${pct}%"></div>
@@ -6118,6 +6966,8 @@
           `).join('')
         : '<div class="psm-empty-msg" style="padding:4px">Sin pasivas registradas</div>';
 
+      const totalDmgVal = run.totalDamage ?? run.totalDmg ?? runMoveTotalDmg;
+
       card.innerHTML = `
         <div class="psm-run-head" title="${escapeHtml(run.date)} · Clic para desplegar la build completa">
           <span class="psm-run-poke">${escapeHtml(run.pokemon)}</span>
@@ -6131,7 +6981,7 @@
         <div class="psm-run-details">
           <div style="display:flex;justify-content:space-between;color:#8fa3c2;margin-bottom:6px;font-size:10px">
             <span>📅 ${escapeHtml(run.date)}</span>
-            <span>💀 ${run.kills || 0} derrotados · 👑 ${run.bosses || 0} jefes · 💥 Golpe Máx ${formatNumber(run.maxHit || 0)}</span>
+            <span>💀 ${run.kills || 0} bajas · 👑 ${run.bosses || 0} jefes · 💥 Total ${formatNumber(totalDmgVal)} · Máx ${formatNumber(run.maxHit || 0)}</span>
           </div>
           ${itemHTML}
           ${coopPlayersHTML}
@@ -7639,7 +8489,7 @@
       tickEngineClockAndXp();
 
       // Detectar reinicio directo de partida (reloj vuelve a < 0:05 tras haber avanzado, o cambia el Pokémon al inicio de una nueva run)
-      const rawGameSec = (gameNS && gameNS.Game && typeof gameNS.Game.time === 'number') ? gameNS.Game.time : engineRunTime;
+      const rawGameSec = getEngineRunSeconds();
       const livePl = getEngineLocalPlayer();
       const liveMonName = (livePl && livePl.mon && livePl.mon.name) ? livePl.mon.name : '';
       if (rawGameSec > maxEngineRunTime) {
@@ -7657,6 +8507,7 @@
         }
       }
 
+      syncBuildWithNativeEngine();
       updateCustomHpBar();
       updateCustomBuffsBar();
 
@@ -7706,6 +8557,6 @@
   if (fovZoom !== 1.0) applyEngineFov();
   updateZoomUI();
   updateFovBadge();
-  console.info('[PS Minimap] v3.9.4 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI Barra de Vida y Widget de Bufos) instalado.');
+  console.info('[PS Minimap] v3.9.5 (Minimapa Abajo Derecha + Panel Daño Arriba Izquierda + Editor UI + Importador Historial + Sync Motor Nativo) instalado.');
   }
 })();
